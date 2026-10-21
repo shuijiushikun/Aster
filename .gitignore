@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+.vscode/
+.env
+.env.*
+!.env.example
+backend/var/
+frontend/node_modules/
+frontend/dist/
+frontend/dist-cross-origin/
+dump.rdb
+.opik/
+backend/evals/results.json

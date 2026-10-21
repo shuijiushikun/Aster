@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 3s --health-retries 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Lint
+        run: ruff check .
+      - name: Unit tests (SQLite + fakeredis)
+        run: pytest -q
+      - name: Integration tests (Postgres + Redis)
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test
+          TEST_REDIS_URL: redis://localhost:6379/1
+        run: pytest -q
+      - name: Migrations apply cleanly and match the models
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test
+        run: |
+          psql postgresql://postgres:postgres@localhost:5432/test -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+          alembic upgrade head
+          alembic check
+
+  evals:
+    # Golden-set evals (backend/evals/README.md). With the provider's API key
+    # secret: the real model plus the LLM tone judge. Without it (fork PRs):
+    # the scripted model, which still checks tools, policy outcomes and the
+    # refund ledger. Fails on any ledger/approval-claim violation or a
+    # regression against evals/baseline.json. The provider is the
+    # EVAL_LLM_PROVIDER repo variable (default gemini). For `omniroute` on a
+    # private (Tailscale) address, add TS_OAUTH_CLIENT_ID / TS_OAUTH_SECRET so
+    # the runner joins the tailnet first.
+    runs-on: ubuntu-latest
+    needs: [backend]
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      LLM_PROVIDER: ${{ vars.EVAL_LLM_PROVIDER || 'gemini' }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
+      OMNIROUTE_BASE_URL: ${{ vars.OMNIROUTE_BASE_URL }}
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      # Optional: log each run as an Opik experiment (Comet-hosted).
+      OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
+      OPIK_WORKSPACE: ${{ vars.OPIK_WORKSPACE }}
+      EVAL_EXPERIMENT: ${{ github.event_name == 'pull_request' && format('pr-{0}-{1}', github.event.number, github.event.pull_request.head.sha) || format('{0}-{1}', github.ref_name, github.sha) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Join the tailnet (private OmniRoute)
+        if: env.TS_OAUTH_CLIENT_ID != ''
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+      - name: Run the golden set
+        run: |
+          key_var="$(echo "$LLM_PROVIDER" | tr a-z A-Z)_API_KEY"
+          if [ -z "${!key_var}" ]; then
+            echo "::warning title=Evals::$key_var isn't available here (fork PR or unset secret), so only the scripted model runs. The live suite runs after merge."
+          fi
+          python -m evals.run --parallel 6
+      - name: Gate
+        run: python -m evals.report
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: backend/evals/results.json
+          if-no-files-found: ignore
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Build for a separate API origin
+        env:
+          VITE_API_BASE_URL: https://api.example.test
+        run: |
+          npx vite build --outDir dist-cross-origin
+          grep -rq "https://api.example.test" dist-cross-origin/assets

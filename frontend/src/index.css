@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * 按用途定义的颜色变量，使用 RGB 通道以支持 Tailwind 透明度修饰符。
+ * 与项目展示页共用近黑色、米白色和青柠色的视觉风格。
+ * 深色主题使用深色背景和浅色文字，浅色主题通过近黑色按钮保持视觉一致。
+ */
+:root {
+  --c-bg: 246 245 240;
+  --c-surface: 255 255 252;
+  --c-surface-2: 238 237 230;
+  --c-line: 222 220 211;
+  --c-fg: 10 11 13;
+  --c-muted: 74 77 84;
+  --c-subtle: 108 111 118;
+  --c-brand: 77 124 15;
+  --c-brand-solid: 10 11 13;
+  --c-on-brand: 200 245 96;
+  --c-accent: 37 99 235;
+  --c-ok: 22 128 61;
+  --c-warn: 161 98 7;
+  --c-bad: 196 50 38;
+  --c-info: 37 99 235;
+  color-scheme: light;
+}
+
+.dark {
+  --c-bg: 10 11 13;
+  --c-surface: 17 19 23;
+  --c-surface-2: 22 25 30;
+  --c-line: 36 39 46;
+  --c-fg: 237 235 230;
+  --c-muted: 163 166 174;
+  --c-subtle: 124 128 138;
+  --c-brand: 200 245 96;
+  --c-brand-solid: 200 245 96;
+  --c-on-brand: 10 11 13;
+  --c-accent: 138 180 255;
+  --c-ok: 91 227 138;
+  --c-warn: 255 181 71;
+  --c-bad: 255 122 102;
+  --c-info: 138 180 255;
+  color-scheme: dark;
+}
+
+::selection {
+  background: rgb(var(--c-brand-solid));
+  color: rgb(var(--c-on-brand));
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  @apply bg-bg font-sans text-fg antialiased;
+}
+
+:focus-visible {
+  @apply outline-none ring-2 ring-brand/60 ring-offset-2 ring-offset-bg;
+}
+
+/* 随主题变化的细滚动条。 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--c-line)) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}

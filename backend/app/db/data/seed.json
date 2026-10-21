@@ -1,0 +1,344 @@
+{
+  "customers": [
+    {
+      "id": "CUST-001",
+      "name": "Alice Johnson",
+      "email": "alice@example.com",
+      "loyalty_tier": "gold",
+      "orders": [
+        {
+          "id": "ORD-1001",
+          "product_name": "Wireless Headphones",
+          "category": "electronics",
+          "amount": 129.99,
+          "status": "delivered",
+          "order_days_ago": 9,
+          "delivered_days_ago": 6,
+          "is_final_sale": false,
+          "refunded": false
+        }
+      ]
+    },
+    {
+      "id": "CUST-002",
+      "name": "Bob Smith",
+      "email": "bob@example.com",
+      "loyalty_tier": "standard",
+      "orders": [
+        {
+          "id": "ORD-1002",
+          "product_name": "Clearance Graphic T-Shirt",
+          "category": "apparel",
+          "amount": 19.99,
+          "status": "delivered",
+          "order_days_ago": 7,
+          "delivered_days_ago": 4,
+          "is_final_sale": true,
+          "refunded": false
+        }
+      ]
+    },
+    {
+      "id": "CUST-003",
+      "name": "Carol Davis",
+      "email": "carol@example.com",
+      "loyalty_tier": "platinum",
+      "orders": [
+        {
+          "id": "ORD-1003",
+          "product_name": "55\" 4K OLED TV",
+          "category": "electronics",
+          "amount": 1299.00,
+          "status": "delivered",
+          "order_days_ago": 11,
+          "delivered_days_ago": 8,
+          "is_final_sale": false,
+          "refunded": false
+        }
+      ]
+    },
+    {
+      "id": "CUST-004",
+      "name": "David Lee",
+      "email": "david@example.com",
+      "loyalty_tier": "standard",
+      "orders": [
+        {
+          "id": "ORD-1004",
+          "product_name": "Bluetooth Speaker",
+          "category": "electronics",
+          "amount": 79.99,
+          "status": "delivered",
+          "order_days_ago": 14,
+          "delivered_days_ago": 10,
+          "is_final_sale": false,
+          "refunded": true
+        }
+      ]
+    },
+    {
+      "id": "CUST-005",
+      "name": "Emma Wilson",
+      "email": "emma@example.com",
+      "loyalty_tier": "gold",
+      "orders": [
+        {
+          "id": "ORD-1005",
+          "product_name": "Trail Running Shoes",
+          "category": "footwear",
+          "amount": 89.99,
+          "status": "delivered",
+          "order_days_ago": 50,
+          "delivered_days_ago": 45,
+          "is_final_sale": false,
+          "refunded": false
+        }
+      ]
+    },
+    {
+      "id": "CUST-006",
+      "name": "Frank Miller",
+      "email": "frank@example.com",
+      "loyalty_tier": "standard",
+      "orders": [
+        {
+          "id": "ORD-1006",
+          "product_name": "Drip Coffee Maker",
+          "category": "home",
+          "amount": 59.99,
+          "status": "shipped",
+          "order_days_ago": 3,
+          "delivered_days_ago": null,
+          "is_final_sale": false,
+          "refunded": false
+        }
+      ]
+    },
+    {
+      "id": "CUST-007",
+      "name": "Grace Chen",
+      "email": "grace@example.com",
+      "loyalty_tier": "platinum",
+      "orders": [
+        {
+          "id": "ORD-1007",
+          "product_name": "Leather Designer Handbag",
+          "category": "accessories",
+          "amount": 650.00,
+          "status": "delivered",
+          "order_days_ago": 10,
+          "delivered_days_ago": 7,
+          "is_final_sale": false,
+          "refunded": false
+        },
+        {
+          "id": "ORD-1008",
+          "product_name": "Silicone Phone Case",
+          "category": "accessories",
+          "amount": 24.99,
+          "status": "delivered",
+          "order_days_ago": 15,
+          "delivered_days_ago": 12,
+          "is_final_sale": false,
+          "refunded": false
+        }
+      ]
+    },
+    {
+      "id": "CUST-008",
+      "name": "Henry Brown",
+      "email": "henry@example.com",
+      "loyalty_tier": "standard",
+      "orders": [
+        {
+          "id": "ORD-1009",
+          "product_name": "Final Sale Winter Jacket",
+          "category": "apparel",
+          "amount": 199.99,
+          "status": "delivered",
+          "order_days_ago": 5,
+          "delivered_days_ago": 2,
+          "is_final_sale": true,
+          "refunded": false
+        }
+      ]
+    },
+    {
+      "id": "CUST-009",
+      "name": "Iris Taylor",
+      "email": "iris@example.com",
+      "loyalty_tier": "gold",
+      "orders": [
+        {
+          "id": "ORD-1010",
+          "product_name": "Aluminum Laptop Stand",
+          "category": "electronics",
+          "amount": 39.99,
+          "status": "delivered",
+          "order_days_ago": 24,
+          "delivered_days_ago": 20,
+          "is_final_sale": false,
+          "refunded": false
+        }
+      ]
+    },
+    {
+      "id": "CUST-010",
+      "name": "Jack Anderson",
+      "email": "jack@example.com",
+      "loyalty_tier": "standard",
+      "orders": [
+        {
+          "id": "ORD-1011",
+          "product_name": "Gaming Console",
+          "category": "electronics",
+          "amount": 499.99,
+          "status": "delivered",
+          "order_days_ago": 8,
+          "delivered_days_ago": 5,
+          "is_final_sale": false,
+          "refunded": false
+        },
+        {
+          "id": "ORD-1012",
+          "product_name": "Extra Wireless Controller",
+          "category": "electronics",
+          "amount": 69.99,
+          "status": "delivered",
+          "order_days_ago": 8,
+          "delivered_days_ago": 5,
+          "is_final_sale": false,
+          "refunded": false
+        }
+      ]
+    },
+    {
+      "id": "CUST-011",
+      "name": "Karen White",
+      "email": "karen@example.com",
+      "loyalty_tier": "platinum",
+      "orders": [
+        {
+          "id": "ORD-1013",
+          "product_name": "Diamond Stud Earrings",
+          "category": "jewelry",
+          "amount": 899.00,
+          "status": "delivered",
+          "order_days_ago": 12,
+          "delivered_days_ago": 9,
+          "is_final_sale": false,
+          "refunded": false
+        }
+      ]
+    },
+    {
+      "id": "CUST-012",
+      "name": "Liam Garcia",
+      "email": "liam@example.com",
+      "loyalty_tier": "standard",
+      "orders": [
+        {
+          "id": "ORD-1014",
+          "product_name": "Premium Yoga Mat",
+          "category": "fitness",
+          "amount": 29.99,
+          "status": "delivered",
+          "order_days_ago": 65,
+          "delivered_days_ago": 60,
+          "is_final_sale": false,
+          "refunded": false
+        }
+      ]
+    },
+    {
+      "id": "CUST-013",
+      "name": "Mia Martinez",
+      "email": "mia@example.com",
+      "loyalty_tier": "gold",
+      "orders": [
+        {
+          "id": "ORD-1015",
+          "product_name": "Smart Watch Series 7",
+          "category": "electronics",
+          "amount": 249.99,
+          "status": "delivered",
+          "order_days_ago": 4,
+          "delivered_days_ago": 1,
+          "is_final_sale": false,
+          "refunded": false
+        },
+        {
+          "id": "ORD-1016",
+          "product_name": "Clearance Watch Band",
+          "category": "accessories",
+          "amount": 19.99,
+          "status": "delivered",
+          "order_days_ago": 4,
+          "delivered_days_ago": 1,
+          "is_final_sale": true,
+          "refunded": false
+        }
+      ]
+    },
+    {
+      "id": "CUST-014",
+      "name": "Noah Rodriguez",
+      "email": "noah@example.com",
+      "loyalty_tier": "standard",
+      "orders": [
+        {
+          "id": "ORD-1017",
+          "product_name": "Ergonomic Office Chair",
+          "category": "furniture",
+          "amount": 219.00,
+          "status": "delivered",
+          "order_days_ago": 18,
+          "delivered_days_ago": 15,
+          "is_final_sale": false,
+          "refunded": false
+        },
+        {
+          "id": "ORD-1018",
+          "product_name": "Electric Standing Desk",
+          "category": "furniture",
+          "amount": 540.00,
+          "status": "delivered",
+          "order_days_ago": 18,
+          "delivered_days_ago": 15,
+          "is_final_sale": false,
+          "refunded": false
+        }
+      ]
+    },
+    {
+      "id": "CUST-015",
+      "name": "Olivia Hernandez",
+      "email": "olivia@example.com",
+      "loyalty_tier": "platinum",
+      "orders": [
+        {
+          "id": "ORD-1019",
+          "product_name": "Espresso Machine",
+          "category": "home",
+          "amount": 320.00,
+          "status": "delivered",
+          "order_days_ago": 28,
+          "delivered_days_ago": 25,
+          "is_final_sale": false,
+          "refunded": false
+        },
+        {
+          "id": "ORD-1020",
+          "product_name": "Handheld Milk Frother",
+          "category": "home",
+          "amount": 45.00,
+          "status": "delivered",
+          "order_days_ago": 28,
+          "delivered_days_ago": 25,
+          "is_final_sale": false,
+          "refunded": true
+        }
+      ]
+    }
+  ]
+}

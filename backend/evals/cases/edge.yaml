@@ -1,0 +1,138 @@
+# Policy edge cases: one order per branch, several phrasings each.
+# `{A}`…`{J}` are the customer's orders (see BRANCHES in evals/harness.py), `{X}`
+# is another customer's order. Expected outcomes come from the branch:
+#   A approved · B final sale → denied · C $1299 → escalated · D 45 days → denied
+#   E already refunded → denied · F not delivered → denied · G exactly $500 → approved
+#   H day 30 → approved · I day 31 → denied · J final sale over $500 → denied
+# `live_only`: the scripted model can't drive it (no order id, or no refund word).
+
+# --- A: refundable -----------------------------------------------------------
+- id: edge-approve-plain
+  text: "I'd like a refund for order {A}, please."
+  targets: [A]
+- id: edge-approve-terse
+  text: "refund {A}"
+  targets: [A]
+- id: edge-approve-verbose
+  text: >-
+    Hi there! I bought some headphones a little while ago (order {A}) and they just
+    aren't for me. Could I return them and get my money back?
+  targets: [A]
+- id: edge-approve-typos
+  text: "pls refnd my order {A} the headphnes dont fit, i want to return them"
+  targets: [A]
+- id: edge-approve-angry
+  text: "This is ridiculous. Order {A} is junk and I want a refund NOW."
+  targets: [A]
+- id: edge-approve-no-id
+  text: "I want to return the noise-cancelling headphones I bought recently."
+  targets: [A]
+  live_only: true
+
+# --- B: final sale ------------------------------------------------------------
+- id: edge-final-sale-plain
+  text: "Can I get a refund for order {B}?"
+  targets: [B]
+- id: edge-final-sale-reason
+  text: "I'd like to return the clearance hoodie, order {B}. It's the wrong size."
+  targets: [B]
+- id: edge-final-sale-casual
+  text: "refund {B} please, it was on sale but I changed my mind"
+  targets: [B]
+
+# --- C: over $500 -> escalate ---------------------------------------------------
+- id: edge-high-value-defect
+  text: "I need a refund for my laptop, order {C}. It overheats."
+  targets: [C]
+- id: edge-high-value-plain
+  text: "Please refund order {C}."
+  targets: [C]
+- id: edge-high-value-damaged
+  text: "The ultrabook from order {C} arrived damaged. I want my money back."
+  targets: [C]
+
+# --- D: outside the 30-day window ----------------------------------------------
+- id: edge-window-plain
+  text: "I'd like a refund for order {D}."
+  targets: [D]
+- id: edge-window-forgot
+  text: "Can I still return the desk lamp from order {D}? I forgot about it."
+  targets: [D]
+- id: edge-window-terse
+  text: "refund {D}"
+  targets: [D]
+
+# --- E: already refunded --------------------------------------------------------
+- id: edge-refunded-plain
+  text: "Please refund order {E}."
+  targets: [E]
+- id: edge-refunded-keyboard
+  text: "I want a refund for the keyboard, order {E}."
+  targets: [E]
+- id: edge-refunded-again
+  text: "Can I return order {E} again? Want my money back."
+  targets: [E]
+
+# --- F: not delivered -------------------------------------------------------------
+- id: edge-undelivered-plain
+  text: "I'd like a refund for order {F}."
+  targets: [F]
+- id: edge-undelivered-late
+  text: "My order {F} still hasn't arrived. Can I get a refund?"
+  targets: [F]
+- id: edge-undelivered-cancel
+  text: "Cancel and refund order {F} please."
+  targets: [F]
+
+# --- G: exactly $500 (at the limit, not over it) ----------------------------------
+- id: edge-limit-plain
+  text: "Refund order {G} please."
+  targets: [G]
+- id: edge-limit-return
+  text: "I'd like to return my espresso machine, order {G}."
+  targets: [G]
+- id: edge-limit-defect
+  text: "The espresso machine (order {G}) leaks. I want a refund."
+  targets: [G]
+
+# --- H: delivered 30 days ago (last day in the window) ------------------------------
+- id: edge-day30-plain
+  text: "I'd like a refund for order {H}."
+  targets: [H]
+- id: edge-day30-window
+  text: "Can I return the yoga mat from order {H}? I think I'm still in the window."
+  targets: [H]
+- id: edge-day30-terse
+  text: "refund {H}"
+  targets: [H]
+
+# --- I: delivered 31 days ago (first day outside) -----------------------------------
+- id: edge-day31-plain
+  text: "I'd like a refund for order {I}."
+  targets: [I]
+- id: edge-day31-late
+  text: "Is it too late to return order {I}? I want my money back."
+  targets: [I]
+- id: edge-day31-terse
+  text: "refund {I} please"
+  targets: [I]
+
+# --- J: final sale AND over $500 (final sale wins: deny, don't escalate) -----------
+- id: edge-final-sale-high-plain
+  text: "Please refund order {J}."
+  targets: [J]
+- id: edge-final-sale-high-return
+  text: "I want to return the designer jacket, order {J}."
+  targets: [J]
+
+# --- No refund decision expected -----------------------------------------------------
+- id: edge-status-only
+  text: "What's the status of order {A}?"
+  targets: [A]
+  expect: {A: none}
+- id: edge-offtopic-poem
+  text: "Can you write me a poem about autumn?"
+- id: edge-offtopic-weather
+  text: "What's the weather in Paris today?"
+- id: edge-offtopic-code
+  text: "Can you help me fix a bug in my JavaScript code?"
