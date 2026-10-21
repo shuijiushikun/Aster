@@ -22,6 +22,8 @@ npm run dev
 
 前端开发地址以终端输出为准，API 代理配置在 `frontend/vite.config.ts`。本地空数据库需要按原配置启用 `SEED_ON_STARTUP=true`；不要对已有数据执行重置。
 
+新建本地演示数据库时，先在后端目录运行 `python -m alembic upgrade head`，再启动服务。数据库地址由 `DATABASE_URL` 决定；迁移与应用必须使用同一份配置。未设置时使用 `backend/var/app.db`，不会自动连接 PostgreSQL。
+
 - 客服对话与管理控制台分别位于前端地址的 `/chat`、`/console`。
 - 本地开发模式 `AUTH_MODE=dev`：在页面上方“开发”区域选择客户；开启“管理”后可查看控制台。
 - 无模型密钥时设置 `LLM_PROVIDER=fake`，脚本模型支持基本中文和英文的订单查询、退款请求。
@@ -64,6 +66,8 @@ API 路径、工具名、数据库字段、状态值和环境变量保留英文�
 回复中的成功声明会与本轮退款工具的真实结果核对；是否允许退款始终由工具内的确定性规则校验决定。本项目记录模拟退款账本，没有接入真实支付。
 
 ## 验证
+
+开发阶段按改动范围选择必要测试，完整回归留到最终验收。后端测试默认使用临时 SQLite 和 fakeredis；只有明确指定专用测试实例时才设置 `TEST_DATABASE_URL` / `TEST_REDIS_URL`，测试会重建测试表和清空测试 Redis。
 
 ```powershell
 # backend 目录
