@@ -2,12 +2,17 @@ import { getToken, type Role } from "./auth";
 import { apiUrl } from "./config";
 import type {
   AdminStats,
+  AdminTicketDetail,
   AgentEvent,
   ConversationDetail,
   ConversationSummary,
   DemoSession,
   Meta,
   Order,
+  TicketAccepted,
+  TicketDecisionRequest,
+  TicketStatus,
+  TicketSummary,
 } from "./types";
 
 export class ApiError extends Error {
@@ -184,4 +189,30 @@ export async function fetchOrders(): Promise<Order[]> {
 
 export async function fetchStats(): Promise<AdminStats> {
   return (await request("admin", "/api/admin/stats")).json();
+}
+
+export async function fetchAdminTickets(
+  status?: TicketStatus,
+  signal?: AbortSignal,
+): Promise<TicketSummary[]> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return (await request("admin", `/api/admin/tickets${query}`, { signal })).json();
+}
+
+export async function fetchAdminTicket(id: string, signal?: AbortSignal): Promise<AdminTicketDetail> {
+  return (await request("admin", `/api/admin/tickets/${encodeURIComponent(id)}`, { signal })).json();
+}
+
+export async function decideAdminTicket(id: string, data: TicketDecisionRequest): Promise<TicketAccepted> {
+  return (await request("admin", `/api/admin/tickets/${encodeURIComponent(id)}/decision`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  })).json();
+}
+
+export async function resumeAdminTicket(id: string, data: { request_id: string }): Promise<TicketAccepted> {
+  return (await request("admin", `/api/admin/tickets/${encodeURIComponent(id)}/resume`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  })).json();
 }

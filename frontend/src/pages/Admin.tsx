@@ -20,6 +20,7 @@ import {
 } from "../api";
 import { getToken, onTokenChange } from "../auth";
 import Markdown from "../components/Markdown";
+import AdminTickets from "../components/AdminTickets";
 import ReasoningTimeline from "../components/ReasoningTimeline";
 import { Badge, LiveDot, Skeleton } from "../components/ui";
 import { useMeta } from "../lib/meta";
@@ -85,10 +86,12 @@ export default function Admin() {
   const [live, setLive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [hasToken, setHasToken] = useState(Boolean(getToken("admin")));
+  const [adminToken, setAdminToken] = useState(getToken("admin"));
+  const [view, setView] = useState<"conversations" | "tickets">("conversations");
+  const hasToken = Boolean(adminToken);
   const timelineRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => onTokenChange(() => setHasToken(Boolean(getToken("admin")))), []);
+  useEffect(() => onTokenChange(() => setAdminToken(getToken("admin"))), []);
 
   useEffect(() => {
     if (!hasToken) return;
@@ -202,9 +205,20 @@ export default function Admin() {
           <Kpi icon={UserRoundCog} label="转人工" value={stats ? d.escalated ?? 0 : undefined} tone="warn" />
           <Kpi icon={Coins} label="模型词元用量" value={stats?.tokens_used.toLocaleString("zh-CN")} tone="info" />
         </div>
+        <nav className="mt-3 flex gap-2" aria-label="管理台视图">
+          {([ ["conversations", "会话记录"], ["tickets", "工单审批"] ] as const).map(([key, label]) => (
+            <button key={key} onClick={() => setView(key)} aria-pressed={view === key}
+              className={clsx("rounded-lg px-3 py-1.5 text-xs font-medium", view === key ? "bg-surface-2 text-fg" : "text-muted hover:bg-surface-2")}>
+              {label}
+            </button>
+          ))}
+        </nav>
       </div>
 
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[300px_1fr]">
+      <div className={clsx("min-h-0 flex-1 flex-col", view === "tickets" ? "flex" : "hidden")}>
+        <AdminTickets key={adminToken} />
+      </div>
+      <div className={clsx("min-h-0 flex-1 lg:grid-cols-[300px_1fr]", view === "conversations" ? "grid" : "hidden")}>
         <aside
           className={clsx(
             "min-h-0 flex-col border-r border-line bg-surface/50",

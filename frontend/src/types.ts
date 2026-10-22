@@ -123,3 +123,73 @@ export interface AdminStats {
   decisions: Record<string, number>;
   tokens_used: number;
 }
+
+export type TicketStatus =
+  | "OPEN"
+  | "WAITING_INFO"
+  | "PENDING_REVIEW"
+  | "APPROVED"
+  | "FAILED_RETRYABLE"
+  | "COMPLETED"
+  | "REJECTED"
+  | "FAILED_TERMINAL"
+  | "CANCELLED";
+
+export interface TicketSummary {
+  id: string;
+  order_id: string;
+  type: string;
+  status: TicketStatus;
+  description: string;
+  created_at: string;
+  updated_at: string;
+  last_error_code: string | null;
+}
+
+export interface AdminTicketDetail extends TicketSummary {
+  customer_id: string;
+  reason_type: string | null;
+  requested_change: string | null;
+  evidence_refs: {
+    document_id: string;
+    revision: string;
+    chunk_index: number;
+    excerpt: string;
+  }[];
+  reference_code: string | null;
+  events: {
+    id: number;
+    kind: string;
+    actor_type: string;
+    payload_json: Record<string, unknown>;
+    created_at: string;
+  }[];
+  order: {
+    id: string;
+    product_id: string | null;
+    product_name: string;
+    status: string;
+    refunded: boolean;
+    is_final_sale: boolean;
+    delivered_date: string | null;
+  };
+  approval: {
+    decision: string;
+    admin_subject: string;
+    comment: string;
+    created_at: string;
+  } | null;
+  last_error_message: string | null;
+}
+
+export interface TicketDecisionRequest {
+  request_id: string;
+  decision: "approved" | "rejected";
+  comment: string;
+}
+
+export interface TicketAccepted {
+  ticket_id: string;
+  status: TicketStatus;
+  request_id: string;
+}

@@ -56,12 +56,15 @@ class GraphEvents:
             for kind, key in (
                 ("ticket_update", "ticket_result"),
                 ("knowledge_sources", "knowledge_evidence"),
+                ("workflow_status", "workflow_result"),
             ):
                 value = update.get(key)
                 if namespace or not value:
                     continue
                 event = (
-                    {"kind": kind, "ticket_id": value["id"], "status": value["status"]}
+                    {"kind": kind, **value}
+                    if kind == "workflow_status"
+                    else {"kind": kind, "ticket_id": value["id"], "status": value["status"]}
                     if kind == "ticket_update"
                     else {"kind": kind, "sources": value.get("sources", [])}
                 )

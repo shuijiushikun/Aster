@@ -105,6 +105,16 @@ async def release_turn_lock(conversation_id: str, token: str) -> None:
     await get_redis().eval(_RELEASE_LOCK, 1, f"lock:conv:{conversation_id}", token)
 
 
+async def acquire_workflow_lock(ticket_id: str, ttl_s: float) -> str | None:
+    token = uuid.uuid4().hex
+    ok = await get_redis().set(f"workflow:{ticket_id}", token, nx=True, px=int(ttl_s * 1000))
+    return token if ok else None
+
+
+async def release_workflow_lock(ticket_id: str, token: str) -> None:
+    await get_redis().eval(_RELEASE_LOCK, 1, f"workflow:{ticket_id}", token)
+
+
 # ---------------------------------------------------------------------------
 # 全局对话并发信号量：记录自动过期，避免异常退出后长期占用名额。
 # ---------------------------------------------------------------------------

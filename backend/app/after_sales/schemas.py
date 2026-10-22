@@ -49,6 +49,12 @@ class DecisionInput(RequestInput):
     comment: str = Field(default="", max_length=1000)
 
 
+class RequestAccepted(BaseModel):
+    ticket_id: str
+    status: TicketStatus
+    request_id: str
+
+
 class TicketSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str

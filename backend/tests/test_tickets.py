@@ -246,7 +246,7 @@ async def test_terminal_failure_cannot_be_bypassed_by_reapplication(engine):
     assert error.value.code == "MANUAL_REQUIRED"
 
 
-async def test_get_api_enforces_scope_and_exposes_no_write_endpoints(client):
+async def test_get_api_enforces_scope_and_has_no_public_create_endpoint(client):
     ticket = await create()
     service = TicketService()
     mine = await client.get("/api/me/tickets", headers=auth(ALICE.sub))
@@ -273,4 +273,4 @@ async def test_get_api_enforces_scope_and_exposes_no_write_endpoints(client):
         await client.post(
             "/api/admin/tickets/" + ticket.id + "/decision", headers=admin_auth(), json={}
         )
-    ).status_code in (404, 405)
+    ).status_code == 422

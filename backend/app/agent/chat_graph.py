@@ -41,6 +41,7 @@ class ChatState(TypedDict, total=False):
     knowledge_messages: list
     router_messages: list
     proposal_messages: list
+    workflow_result: dict
 
 
 _STATUSES = {
@@ -318,6 +319,9 @@ def compile_chat_graph(model, fallback=None):
                 origin_conversation_id=ctx.conversation_id,
                 start_open=True,
             )
+            from app.workflow.resume import coordinate
+
+            workflow_result = await coordinate(ticket.id)
             detail = await TicketService().detail(
                 Principal(ctx.verified_customer_id, "customer"), ticket.id
             )
@@ -325,9 +329,10 @@ def compile_chat_graph(model, fallback=None):
                 "ticket_result": {
                     "id": ticket.id,
                     "order_id": ticket.order_id,
-                    "status": ticket.status,
+                    "status": detail.status,
                     "reference_code": detail.reference_code,
-                }
+                },
+                "workflow_result": {"ticket_id": ticket.id, "state": workflow_result["state"]},
             }
         except TicketError as exc:
             return {"safe_response": exc.message}

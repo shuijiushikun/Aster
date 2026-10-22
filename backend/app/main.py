@@ -59,6 +59,7 @@ from app.schemas import (
     OrderOut,
     ReasoningEventOut,
 )
+from app.workflow.runtime import workflow_lifespan
 
 settings = get_settings()
 logger = logging.getLogger("app")
@@ -76,7 +77,8 @@ async def lifespan(_app: FastAPI):
     if settings.seed_on_startup:
         await seed_if_empty(create_tables=True)
     log_event(logger, "startup", env=settings.env, llm_provider=settings.llm_provider)
-    yield
+    async with workflow_lifespan():
+        yield
     tracing.flush()
     await shared.close_redis()
     await db.dispose()

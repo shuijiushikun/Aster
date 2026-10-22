@@ -13,7 +13,7 @@
 ```powershell
 # 后端目录；使用你原有的 Python 环境
 python -m pip install -r requirements-dev.txt
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+python -m scripts.serve
 
 # 另一个终端，在 frontend 目录运行
 npm install
@@ -27,7 +27,7 @@ npm run dev
 - 客服对话与管理控制台分别位于前端地址的 `/chat`、`/console`。
 - 本地开发模式 `AUTH_MODE=dev`：在页面上方“开发”区域选择客户；开启“管理”后可查看控制台。
 - 无模型密钥时设置 `LLM_PROVIDER=fake`，脚本模型支持基本中文和英文的订单查询、退款请求。
-- 未配置 PostgreSQL/Redis 时，单进程本地开发可使用 SQLite 和内存 Redis 替代；需要验证并发事务或持久化恢复时使用专用 PostgreSQL/Redis 实例。
+- 未配置 PostgreSQL/Redis 时，单进程本地开发可使用 SQLite 和内存 Redis 替代；换货持久化工作流需要 PostgreSQL 和 Redis。
 
 ## 中文化范围
 
@@ -89,7 +89,24 @@ python -m app.db.seed --exchange-samples
 | `GET /api/admin/tickets` | 管理员授权范围内的工单列表，可按 `status` 筛选 |
 | `GET /api/admin/tickets/{ticket_id}` | 工单、订单、审批及事件详情 |
 
-列表支持 `limit`（1～100，默认 50）与 `offset`（默认 0）。他人工单与不存在的工单统一返回 404，受限管理员仍按 JWT 的客户范围过滤。当前聊天 Graph 和前端尚未接入换货；补充、审批、取消和恢复的公开 POST 接口及工作流统一在 T5 接入。
+列表支持 `limit`（1～100，默认 50）与 `offset`（默认 0）。他人工单与不存在的工单统一返回 404，受限管理员仍按 JWT 的客户范围过滤。
+
+### 审批与持久化恢复
+
+T5 已接入独立换货工作流：聊天建单提交后，启动校验并暂停在补充材料或人工审批节点。每张工单固定使用 `exchange:<ticket_id>` 线程，`AsyncPostgresSaver` 保存执行位置；业务工单、审批、请求幂等记录始终是权威事实。关闭重开后端后，可通过管理员恢复入口继续同一工单，受理前再次检查退款和业务规则，不重复生成模拟受理单。
+
+| POST 接口 | 请求体与用途 |
+|---|---|
+| `/api/me/tickets/{ticket_id}/supplement` | `request_id`、`description`，可选 `reason_type`、`requested_change`；仅待补充时提交 |
+| `/api/me/tickets/{ticket_id}/cancel` | `request_id`；仅待补充或待审批时首次取消 |
+| `/api/admin/tickets/{ticket_id}/decision` | `request_id`、`decision`（`approved`/`rejected`），可选 `comment` |
+| `/api/admin/tickets/{ticket_id}/resume` | `request_id`；重试启动、唤醒或执行，不能代替材料或审批 |
+
+这些接口先提交事实，再在请求内有限时地尝试推进，返回 `202` 和接收时快照。即使推进已完成，响应里的 `APPROVED` 也不等于最新状态；以 GET 详情为准。同一身份、接口、工单与 `request_id` 的相同内容重放返回原快照，并可再次尝试推进；改内容须用新 ID，否则返回 409。推进超时、Redis 忙或进程退出后，可重放原请求或在 `/console` 的“工单审批”页点击“重试继续处理”。没有后台扫描或自动重试队列；`FAILED_TERMINAL` 需人工处置，恢复接口返回 409。
+
+业务表仍由 Alembic 迁移。后端启动时，由 SDK `setup()` 在同一 PostgreSQL 数据库内维护 checkpoint 表（`checkpoint_migrations`、`checkpoints`、`checkpoint_blobs`、`checkpoint_writes`），数据库账号需有建表/索引权限。进程复用 Saver 与连接池，通过 Redis 工单锁串行推进；`WORKFLOW_TIMEOUT_S` 默认 30 秒，释放锁另有最多 5 秒清理时间，`WORKFLOW_POOL_SIZE` 默认 4。Windows 的 psycopg 异步连接要求 SelectorEventLoop，前文的 `python -m scripts.serve` 已处理；其他平台也可使用此入口。
+
+管理员页面提供最小的查询、审批与恢复入口；客户补充/取消按钮、完整事件展示和上下文记忆在 T6 接入。当前受理仍是本地模拟记录，没有实际发货。
 
 ## 只读商城 MCP
 
@@ -174,7 +191,7 @@ python -m app.rag.evaluate --live --out var/retrieval-evaluation.json
 
 在后端 `.env` 设置 `AGENT_V2_ENABLED=true`，并分别启动 FastAPI 和上面的 Commerce MCP 进程。配置好 DeepSeek、知识索引及百炼/Qdrant 后，聊天会先用结构化 Router 区分退款、换货申请、知识咨询、订单查询和工单跟进。设为 `false` 可切回原退款聊天；退款/换货互斥和数据库约束始终有效。公开演示额度耗尽时仍使用原零费用脚本模型。
 
-Order Agent 只能调用只读 MCP 工具，每轮最多 3 次；Knowledge Agent 只能检索 LlamaIndex，商品范围从已验证订单或商品目录确定。普通查询和工单跟进不会创建工单。明确申请换货时，需要唯一的本人订单与足够知识证据，模型提案经过后端核验，再调用领域服务创建或返回已有工单。新工单停在 `OPEN`，此阶段不启动审批工作流，也不代表换货已批准或受理。
+Order Agent 只能调用只读 MCP 工具，每轮最多 3 次；Knowledge Agent 只能检索 LlamaIndex，商品范围从已验证订单或商品目录确定。普通查询和工单跟进不会创建工单或自动恢复工作流。明确申请换货时，需要唯一的本人订单与足够知识证据，模型提案经过后端核验，再调用领域服务创建或返回已有工单，并尝试启动审批工作流；建单不代表换货已批准或受理。
 
 SSE 保留原事件，增加 `knowledge_sources` 和 `ticket_update`。客户正式消息只取图的 `final_response`，中间 JSON 和专业代理文本仅为执行步骤；所有模型调用统一记录用量，缺失用量标为 `unknown`。入口：`app/agent/chat_graph.py`；事件适配：`streaming.py`；用量入口：`runtime.py`。
 

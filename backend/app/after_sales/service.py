@@ -1,4 +1,4 @@
-"""换货领域事务。T1只供服务调用，公开写接口和工作流协调留到T5。"""
+"""换货领域事务；业务事实独立于工作流 checkpoint 提交。"""
 
 import hashlib
 import json
@@ -217,8 +217,13 @@ class TicketService:
     async def decide(self, principal: Principal, ticket_id: str, data: DecisionInput) -> dict:
         return await self._request(principal, ticket_id, "decision", data)
 
+    async def request_resume(
+        self, principal: Principal, ticket_id: str, data: RequestInput
+    ) -> dict:
+        return await self._request(principal, ticket_id, "resume", data)
+
     async def _request(self, principal, ticket_id, operation, data):
-        _require_role(principal, "admin" if operation == "decision" else "customer")
+        _require_role(principal, "admin" if operation in ("decision", "resume") else "customer")
         payload = data.model_dump(exclude={"request_id"})
         digest = hashlib.sha256(
             json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
@@ -256,7 +261,7 @@ class TicketService:
                         raise _conflict()
                     _transition(ticket, "CANCELLED")
                     _event(session, ticket, "CANCELLED", principal)
-            else:
+            elif operation == "decision":
                 approval = await session.scalar(
                     select(TicketApproval).where(TicketApproval.ticket_id == ticket_id)
                 )
@@ -292,6 +297,10 @@ class TicketService:
                         principal,
                         {"decision": data.decision, "status": status},
                     )
+            else:
+                if ticket.status == "FAILED_TERMINAL":
+                    raise _conflict("该工单需要人工处置，不能自动重试。", "MANUAL_REQUIRED")
+                _event(session, ticket, "RESUME_REQUESTED", principal)
             snapshot = {
                 "ticket_id": ticket.id,
                 "status": ticket.status,
@@ -310,6 +319,60 @@ class TicketService:
                 )
             )
             return snapshot
+
+    async def workflow_fact(self, ticket_id: str) -> dict:
+        """内部协调只读快照；外部调用方必须先完成客户/管理员授权。"""
+        async with db.SessionLocal() as session:
+            ticket = await session.get(AfterSalesTicket, ticket_id)
+            if ticket is None:
+                raise _not_found()
+            order = await session.get(Order, ticket.order_id)
+            approval = await session.scalar(
+                select(TicketApproval).where(TicketApproval.ticket_id == ticket_id)
+            )
+            return {
+                "ticket_id": ticket.id,
+                "thread_id": ticket.workflow_thread_id,
+                "status": ticket.status,
+                "version": ticket.version,
+                "missing_fields": _policy(order, ticket).missing_fields,
+                "approval": approval.decision if approval else None,
+                "conversation_id": ticket.origin_conversation_id,
+            }
+
+    async def validate_workflow(self, ticket_id: str) -> dict:
+        async with db.SessionLocal() as session, session.begin():
+            order, ticket = await self._lock_ticket(session, ticket_id)
+            if ticket.status in ("OPEN", "WAITING_INFO", "PENDING_REVIEW"):
+                result = _policy(order, ticket)
+                if ticket.status != result.status or ticket.last_error_code != result.code:
+                    _transition(ticket, result.status, result.code)
+                    _event(
+                        session,
+                        ticket,
+                        "VALIDATED",
+                        None,
+                        {
+                            "status": ticket.status,
+                            "code": result.code,
+                            "missing_fields": result.missing_fields,
+                        },
+                    )
+            return {"status": ticket.status}
+
+    async def mark_execution_failure(self, ticket_id: str, *, retryable: bool) -> dict:
+        async with db.SessionLocal() as session, session.begin():
+            _, ticket = await self._lock_ticket(session, ticket_id)
+            # A crash after commit or a concurrent refund must never be reversed.
+            if ticket.status in ("APPROVED", "FAILED_RETRYABLE"):
+                status = "FAILED_RETRYABLE" if retryable else "FAILED_TERMINAL"
+                code = "EXECUTION_UNAVAILABLE" if retryable else "MANUAL_REQUIRED"
+                _transition(ticket, status, code)
+                ticket.last_error_message = (
+                    "执行暂时失败，可重试。" if retryable else "执行无法自动完成，需要人工处置。"
+                )
+                _event(session, ticket, "EXECUTION_FAILED", None, {"status": status, "code": code})
+            return {"status": ticket.status}
 
     async def accept_exchange(self, ticket_id: str) -> ExchangeAcceptance | None:
         """内部确定性执行入口：必须读取已保存审批；没有外部发货或支付调用。"""
