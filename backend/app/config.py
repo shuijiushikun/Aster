@@ -97,6 +97,25 @@ class Settings(BaseSettings):
     commerce_mcp_timeout_s: float = Field(default=5.0, gt=0, le=30)
     commerce_mcp_max_retries: int = Field(default=1, ge=0, le=2)
 
+    # 售后知识检索：Embedding 显式使用百炼，集合与其他项目隔离。
+    embed_model_name: str = "text-embedding-v3"
+    embed_api_key: str = ""
+    embed_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    embed_dimension: int = Field(default=1024, gt=0)
+    qdrant_url: str = ""
+    qdrant_api_key: str = ""
+    qdrant_collection: str = "after_sales_knowledge_v1"
+    rag_timeout_s: float = Field(default=20, gt=0, le=60)
+    rag_search_mode: str = "hybrid"
+    rag_rerank_enabled: bool = True
+    rag_top_k: int = Field(default=4, ge=1, le=4)
+    rag_candidate_k: int = Field(default=12, ge=4, le=30)
+    # 未校准时不按分数拒答；实际演示值由独立校准样本确定。
+    rag_min_dense_score: float = Field(default=0.0, ge=0, le=1)
+    rerank_model: str = "qwen3-rerank"
+    rerank_api_key: str = ""  # 空值时复用百炼 Embedding Key。
+    rerank_url: str = "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank"
+
     # 身份认证：令牌由宿主网站签发。
     # "dev" 为本地身份选择器；"jwt" 为宿主网站签发令牌；
     # "demo" 为公开沙箱，匿名访客获得临时客户身份。

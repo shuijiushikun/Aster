@@ -122,6 +122,54 @@ python -m scripts.commerce_mcp_smoke
 
 超时和离线分别返回 `MCP_TIMEOUT`、`MCP_UNAVAILABLE`，默认每次最多重试一次，本轮失败后停止后续商城调用；没有本地写入兜底。T2 已提供可调用的工具适配器，新 Order Agent 在 T4 绑定这四个工具；现有退款聊天流程继续使用原工具。服务仅在本机监听，不提供退款、审批、换货执行或其他写工具。
 
+## 售后知识检索
+
+知识源位于 `backend/data/knowledge/`：8 份原创演示文档覆盖通用流程、HP-01 耳机和 TSHIRT-01 服装。文档以 JSON front matter 声明型号、品类、版本、有效状态和参考来源，正文按小节切分。排障与测量写法参考 [Apple 官方说明](https://support.apple.com/en-ie/100494) 和 [UNIQLO 官方测量指南](https://faq-sg.uniqlo.com/articles/en_US/Knowledge/Product-Measurement-Guidelines-SG)；模拟商品尺寸由本项目设定，店铺规则以业务源码为准，没有移植外部品牌的售后承诺。
+
+从根目录 `.env.example` 复制知识检索字段到 `backend/.env`，配置百炼 `EMBED_API_KEY`、`QDRANT_URL` 和 `QDRANT_API_KEY`。Embedding 默认使用 `text-embedding-v3`、1024 维；Qdrant 使用专属集合 `after_sales_knowledge_v1`，不要填写其他项目的集合名。数据库先按前文迁移至最新版本；索引脚本仅同步 `knowledge_documents` 目录，不重建订单/工单表。后端目录运行：
+
+```powershell
+python -m app.rag.index_knowledge
+```
+
+重复运行同一语料返回 `unchanged`，23 个片段保持稳定，另有 1 个集合 manifest。manifest 记录 Embedding 模型、维度、端点、索引版本和语料哈希；不兼容时要求换新集合。文档停用/删除或更新版本后重新运行脚本，只发布当前有效版本并回收本项目的旧片段；不自动删除整个集合。首次创建/更新时会调用真实 Embedding API。
+
+LlamaIndex 负责切分、向量库适配和 Retriever，明确注入百炼 Embedding；没有默认 OpenAI 调用或 QueryEngine 生成答案。`KnowledgeRetriever.retrieve(query, model_code=..., category=...)` 返回最多 4 条带文档 ID、版本、小节编号、摘录、分数类型及参考来源的证据。型号/品类必须由调用方从已验证订单或商品目录取得；未知或不匹配的型号要求核实，缺少型号时仅检索通用文档。检索按型号/品类、active 状态、当前文档版本和语料代次过滤；证据不负责授予退款或换货权限。
+
+支持三个可比较配置：`RAG_SEARCH_MODE=dense`；`hybrid`；以及 `hybrid` 配合 `RAG_RERANK_ENABLED=true`。Hybrid 用中文二元片段和完整英文/型号词的 log-TF 稀疏向量，与语义向量按 RRF 排名融合；这是轻量词法召回，不是 BM25 或额外的稀疏大模型。可选 `qwen3-rerank` 重排候选，增加一次百炼调用，失败时结果携带 `rerank_unavailable` 并保留原召回顺序。初始化时注入现有 Qdrant store/client，关闭时一并释放，示例：
+
+```python
+from app.config import get_settings
+from app.rag.retriever import KnowledgeRetriever
+from app.rag.store import open_store
+
+async def search_example():
+    settings = get_settings()
+    async with open_store(settings) as (store, client):
+        retriever = KnowledgeRetriever(store, client, settings)
+        return await retriever.retrieve("右耳没有声音怎么排查", model_code="HP-01", category="digital")
+```
+
+真实小型验证包含独立的 8 条阈值校准样本和 16 条评测样本，不使用 fake Qdrant 或 mocked Embedding 替代效果验证：
+
+```powershell
+python -m app.rag.evaluate --live --calibrate --out var/retrieval-calibration.json
+# 查看 suggested_min_dense_score，再填写本地 RAG_MIN_DENSE_SCORE。
+python -m app.rag.evaluate --live --out var/retrieval-evaluation.json
+```
+
+评测共享各模式的真实查询向量，记录 Hit@1/4、引用有效率、跨型号误检、无证据拒答、错误、重排降级及检索耗时（不含共享 Embedding 批次）。拒答阈值只用于当前模型的 dense 余弦分数，不比较 RRF/Rerank 与余弦分数；换模型或语料需重新校准。默认阈值为 0，表示尚未做分数校准，不能宣称能识别所有无关问题。知识不足返回 `insufficient_evidence`，依赖故障返回 `unavailable`。这仍是少量人工标注的演示数据，不能证明通用检索效果，也不能保证候选里的每一段都回答了问题。聊天 Graph 的 Knowledge Agent 绑定留到下一阶段。
+
+2026-10-22 使用真实百炼与云端 Qdrant 的结果：
+
+| 模式 | 正例 Hit@1 | 正例 Hit@4 | 无证据正确拒答 | 平均检索耗时 |
+|---|---:|---:|---:|---:|
+| Dense | 10/12 | 11/12 | 4/4 | 1265 ms |
+| Hybrid | 9/12 | 11/12 | 4/4 | 1871 ms |
+| Hybrid + Rerank | 11/12 | 11/12 | 4/4 | 1941 ms |
+
+三种模式引用有效率均为 100%，跨型号误检和依赖错误均为 0。独立校准得到本地阈值 `0.734367`，评测中的 E05（平铺胸宽与人体胸围区别）被误判为无证据；未用评测集重新调阈值。当前默认打开 Hybrid + Rerank，以这组样本的首条命中改善为依据；纯 Hybrid 未显示收益。结果只适用于此小型语料，耗时不含共享查询向量化且不代表稳定性能基准；原始报告由上述命令生成于忽略的 `backend/var/`。
+
 ## DeepSeek
 
 在后端 `.env` 中配置独立的 DeepSeek 连接信息，保留原有供应商配置以便切换：
