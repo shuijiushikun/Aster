@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
@@ -90,6 +90,12 @@ class Settings(BaseSettings):
 
     # Redis：开发或测试环境留空时使用进程内 fakeredis，仅支持单进程。
     redis_url: str = ""
+
+    # 独立的本地只读商城 MCP。服务身份与前端 JWT 使用不同的密钥和 audience。
+    commerce_mcp_url: str = "http://127.0.0.1:8001/mcp"
+    commerce_mcp_service_secret: str = ""
+    commerce_mcp_timeout_s: float = Field(default=5.0, gt=0, le=30)
+    commerce_mcp_max_retries: int = Field(default=1, ge=0, le=2)
 
     # 身份认证：令牌由宿主网站签发。
     # "dev" 为本地身份选择器；"jwt" 为宿主网站签发令牌；

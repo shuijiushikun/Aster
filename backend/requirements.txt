@@ -16,6 +16,7 @@ langchain-anthropic==1.7.4
 langchain-openai==1.6.6
 langchain-google-genai==4.4.0
 httpx==0.28.1
+mcp==1.26.0
 prometheus-client==0.21.1
 sentry-sdk==2.19.2
 opik==2.2.95

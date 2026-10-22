@@ -91,6 +91,37 @@ python -m app.db.seed --exchange-samples
 
 列表支持 `limit`（1～100，默认 50）与 `offset`（默认 0）。他人工单与不存在的工单统一返回 404，受限管理员仍按 JWT 的客户范围过滤。当前聊天 Graph 和前端尚未接入换货；补充、审批、取消和恢复的公开 POST 接口及工作流统一在 T5 接入。
 
+## 只读商城 MCP
+
+Commerce MCP Server 由本项目实现，复用官方 Python SDK（固定为本阶段验证的 `mcp==1.26.0`），通过 Streamable HTTP 暴露现有演示数据库的四个查询工具：
+
+| 工具 | 模型可提供的参数 | 结果 |
+|---|---|---|
+| `list_my_orders` | `limit`，1～20，默认 10 | 本人最近订单 |
+| `get_order` | `order_id` | 本人订单及可信商品型号，旧订单型号可为空 |
+| `get_product` | `model_code` | 公开商品信息 |
+| `get_exchange_policy_facts` | `order_id` | 本人订单的妥投、清仓、退款和换货受理事实 |
+
+在后端 `.env` 增加 `COMMERCE_MCP_URL=http://127.0.0.1:8001/mcp` 和独立的 `COMMERCE_MCP_SERVICE_SECRET`（至少 32 字节）。可用 `python -c "import secrets; print(secrets.token_urlsafe(32))"` 生成一次，后端与商城进程读取同一份本地配置。此密钥仅用于服务之间，不填写模型 Key 或前端 JWT。
+
+在后端目录、相同 Python 环境中另开终端启动：
+
+本机本轮使用基于 `yolo` Python 3.13.9 的项目环境 `backend/.venv-yolo`，可在后端目录先运行 `.\.venv-yolo\Scripts\Activate.ps1`。使用其他环境时先安装更新后的 `requirements.txt`，避免加载旧版 MCP SDK。
+
+```powershell
+python -m uvicorn app.commerce_mcp.server:create_app --factory --host 127.0.0.1 --port 8001
+```
+
+使用 T1 的换货样本执行一次只读检查，不调用模型或写业务数据：
+
+```powershell
+python -m scripts.commerce_mcp_smoke
+```
+
+调用链为 `LangChain 工具适配器 → MCP Client → Commerce MCP Server → 数据库`。适配器从后端已验证的 `ToolContext` 取得客户身份，签发有效期 60 秒、限定 audience 的内部令牌；商城服务重新验证并在 SQL 中过滤订单归属。模型参数没有 `customer_id`，他人记录与不存在记录统一返回 `NOT_FOUND`。成功数据与错误均经 Pydantic 合同校验，PostgreSQL 查询使用只读事务。
+
+超时和离线分别返回 `MCP_TIMEOUT`、`MCP_UNAVAILABLE`，默认每次最多重试一次，本轮失败后停止后续商城调用；没有本地写入兜底。T2 已提供可调用的工具适配器，新 Order Agent 在 T4 绑定这四个工具；现有退款聊天流程继续使用原工具。服务仅在本机监听，不提供退款、审批、换货执行或其他写工具。
+
 ## DeepSeek
 
 在后端 `.env` 中配置独立的 DeepSeek 连接信息，保留原有供应商配置以便切换：

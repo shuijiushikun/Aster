@@ -42,6 +42,7 @@ log = logging.getLogger(__name__)
 class ToolContext:
     conversation_id: str
     verified_customer_id: str | None = None
+    commerce_mcp_failed: bool = False
 
 
 ESCALATION_REASON_PREFIX = "[智能体整理的客户诉求；内容未经核实] "
