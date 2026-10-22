@@ -7,10 +7,11 @@ from pathlib import Path
 from sqlalchemy import select
 
 from app.db import session as db
-from app.db.models import Customer, Order, utcnow
+from app.db.models import Customer, Order, Product, utcnow
 from app.localization import product_name
 
 SEED_FILE = Path(__file__).resolve().parent / "data" / "seed.json"
+EXCHANGE_SEED_FILE = SEED_FILE.with_name("exchange_seed.json")
 
 
 def _days_ago(days: int | None):
@@ -65,6 +66,41 @@ def _load(session) -> None:
             )
 
 
+async def seed_exchange_samples() -> dict[str, int]:
+    """显式添加独立换货样本；不重置或改写原客户、订单和退款事实。"""
+    data = json.loads(EXCHANGE_SEED_FILE.read_text(encoding="utf-8"))
+    inserted = {"products": 0, "customers": 0, "orders": 0}
+    async with db.SessionLocal() as session, session.begin():
+        for fields in data["products"]:
+            if await session.get(Product, fields["id"]) is None:
+                session.add(Product(**fields))
+                inserted["products"] += 1
+        for fields in data["customers"]:
+            if await session.get(Customer, fields["id"]) is None:
+                session.add(Customer(**fields))
+                inserted["customers"] += 1
+        await session.flush()
+        for fields in data["orders"]:
+            if await session.get(Order, fields["id"]) is not None:
+                continue
+            product = await session.get(Product, fields["product_id"])
+            delivered = _days_ago(fields["delivered_days_ago"])
+            session.add(Order(id=fields["id"], customer_id=fields["customer_id"], product_id=product.id,
+                product_name=product.name, category=product.category, amount=Decimal(fields["amount"]),
+                status="delivered", delivered_date=delivered, order_date=delivered-timedelta(days=3),
+                is_final_sale=fields["is_final_sale"], refunded=False))
+            inserted["orders"] += 1
+    return inserted
+
+
 if __name__ == "__main__":
-    inserted = asyncio.run(seed_if_empty())
-    print(f"Seeded database from {SEED_FILE}" if inserted else "Database already seeded")
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Load explicit demo data without resetting existing rows.")
+    parser.add_argument("--exchange-samples", action="store_true", help="add the two products and four exchange orders")
+    args = parser.parse_args()
+    if args.exchange_samples:
+        print(json.dumps(asyncio.run(seed_exchange_samples())))
+    else:
+        inserted = asyncio.run(seed_if_empty())
+        print(f"Seeded database from {SEED_FILE}" if inserted else "Database already seeded")

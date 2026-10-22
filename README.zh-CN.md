@@ -65,6 +65,47 @@ API 路径、工具名、数据库字段、状态值和环境变量保留英文�
 
 回复中的成功声明会与本轮退款工具的真实结果核对；是否允许退款始终由工具内的确定性规则校验决定。本项目记录模拟退款账本，没有接入真实支付。
 
+## 换货工单后端
+
+换货领域服务已支持建单、补充材料、人工审批、审批前取消和幂等模拟受理。申请期限按每张工单首次提交时间判断，等待审批不会导致过期；被拒绝或取消后可以在期限内重新申请，同一订单最多成功受理一次。
+
+待受理期间仍按原规则允许退款，退款成功会在同一事务内终止活跃换货工单；换货受理成功后禁止退款。审批和受理需要持久化业务事实，模型不能直接批准换货。
+
+先在后端目录升级数据库，再按需添加独立的换货演示样本：
+
+```powershell
+python -m alembic upgrade head
+python -m app.db.seed --exchange-samples
+```
+
+新增样本包含 2 款商品、2 名客户和 4 个订单，重复运行只添加缺失样本，不重置原退款数据。普通样本客户为 `CUST-EX-001`，订单为 `ORD-EX-1001`、`ORD-EX-1002`；`CUST-EX-002` 的两个订单分别演示超期和清仓拒绝。
+
+已提供的工单查询接口均使用现有 Bearer JWT：
+
+| 接口 | 返回内容 |
+|---|---|
+| `GET /api/me/tickets` | 当前客户的工单列表 |
+| `GET /api/me/tickets/{ticket_id}` | 当前客户的工单详情与事件 |
+| `GET /api/admin/tickets` | 管理员授权范围内的工单列表，可按 `status` 筛选 |
+| `GET /api/admin/tickets/{ticket_id}` | 工单、订单、审批及事件详情 |
+
+列表支持 `limit`（1～100，默认 50）与 `offset`（默认 0）。他人工单与不存在的工单统一返回 404，受限管理员仍按 JWT 的客户范围过滤。当前聊天 Graph 和前端尚未接入换货；补充、审批、取消和恢复的公开 POST 接口及工作流统一在 T5 接入。
+
+## DeepSeek
+
+在后端 `.env` 中配置独立的 DeepSeek 连接信息，保留原有供应商配置以便切换：
+
+```dotenv
+LLM_PROVIDER=deepseek
+DEEPSEEK_API_KEY=替换为你的专用密钥
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-flash
+```
+
+适配器通过现有 OpenAI 兼容客户端使用非思考模式，支持工具调用、JSON mode 和流式输出，并沿用超时与重试限制。模型名称可按账号能力调整；无密钥时仍可使用 `LLM_PROVIDER=fake` 推进开发。
+
+从后端目录运行 `python -m scripts.deepseek_smoke --live`，会使用专用密钥检查回复、静态工具往返、JSON 和流式输出并消耗模型额度。未配置 `DEEPSEEK_API_KEY` 时明确跳过；不带 `--live` 不发起请求。超时、429 和异常处理由本地模拟请求测试覆盖。
+
 ## 验证
 
 开发阶段按改动范围选择必要测试，完整回归留到最终验收。后端测试默认使用临时 SQLite 和 fakeredis；只有明确指定专用测试实例时才设置 `TEST_DATABASE_URL` / `TEST_REDIS_URL`，测试会重建测试表和清空测试 Redis。

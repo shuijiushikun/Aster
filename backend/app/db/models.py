@@ -4,6 +4,7 @@ from decimal import Decimal
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -47,6 +48,7 @@ class Order(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     customer_id: Mapped[str] = mapped_column(ForeignKey("customers.id"), index=True)
+    product_id: Mapped[str | None] = mapped_column(ForeignKey("products.id"), nullable=True)
     product_name: Mapped[str] = mapped_column(String, nullable=False)
     category: Mapped[str] = mapped_column(String, default="general")
     amount: Mapped[Decimal] = mapped_column(Money, nullable=False)
@@ -165,3 +167,123 @@ class ConversationArchive(Base):
     opik_trace_ids: Mapped[list] = mapped_column(JSON, default=list)
     # 归档快照结构：{"orders": [...], "messages": [...], "events": [...]}。
     transcript: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+ACTIVE_TICKET_STATUSES = ("OPEN", "WAITING_INFO", "PENDING_REVIEW", "APPROVED", "FAILED_RETRYABLE")
+TICKET_STATUSES = ACTIVE_TICKET_STATUSES + ("COMPLETED", "REJECTED", "FAILED_TERMINAL", "CANCELLED")
+_active_ticket_sql = "status IN ('OPEN','WAITING_INFO','PENDING_REVIEW','APPROVED','FAILED_RETRYABLE')"
+
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    category: Mapped[str] = mapped_column(String, nullable=False)
+    model_code: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+
+
+class AfterSalesTicket(Base):
+    __tablename__ = "after_sales_tickets"
+    __table_args__ = (
+        Index("uq_tickets_active_order_type", "order_id", "type", unique=True,
+              postgresql_where=text(_active_ticket_sql), sqlite_where=text(_active_ticket_sql)),
+        CheckConstraint("type = 'exchange'", name="ck_ticket_type"),
+        CheckConstraint("status IN (" + ",".join(repr(s) for s in TICKET_STATUSES) + ")",
+                        name="ck_ticket_status"),
+        CheckConstraint("reason_type IS NULL OR reason_type IN ('size','defect')", name="ck_ticket_reason"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    customer_id: Mapped[str] = mapped_column(ForeignKey("customers.id"), index=True)
+    order_id: Mapped[str] = mapped_column(ForeignKey("orders.id"), index=True)
+    origin_conversation_id: Mapped[str | None] = mapped_column(ForeignKey("conversations.id"))
+    workflow_thread_id: Mapped[str] = mapped_column(String, unique=True)
+    type: Mapped[str] = mapped_column(String, default="exchange", server_default="exchange")
+    reason_type: Mapped[str | None] = mapped_column(String)
+    description: Mapped[str] = mapped_column(String(2000))
+    requested_change: Mapped[str | None] = mapped_column(String(500))
+    evidence_refs: Mapped[list] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    last_error_code: Mapped[str | None] = mapped_column(String(64))
+    last_error_message: Mapped[str | None] = mapped_column(String(500))
+
+
+class TicketApproval(Base):
+    __tablename__ = "ticket_approvals"
+    __table_args__ = (CheckConstraint("decision IN ('approved','rejected')", name="ck_approval_decision"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ticket_id: Mapped[str] = mapped_column(ForeignKey("after_sales_tickets.id"), unique=True)
+    admin_subject: Mapped[str] = mapped_column(String)
+    decision: Mapped[str] = mapped_column(String)
+    comment: Mapped[str] = mapped_column(String(1000), default="")
+    created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
+
+
+class ExchangeAcceptance(Base):
+    __tablename__ = "exchange_acceptances"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ticket_id: Mapped[str] = mapped_column(ForeignKey("after_sales_tickets.id"), unique=True)
+    order_id: Mapped[str] = mapped_column(ForeignKey("orders.id"), unique=True)
+    idempotency_key: Mapped[str] = mapped_column(String, unique=True)
+    reference_code: Mapped[str] = mapped_column(String, unique=True)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
+
+
+class TicketEvent(Base):
+    __tablename__ = "ticket_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ticket_id: Mapped[str] = mapped_column(ForeignKey("after_sales_tickets.id"), index=True)
+    kind: Mapped[str] = mapped_column(String)
+    actor_type: Mapped[str] = mapped_column(String)
+    actor_id: Mapped[str] = mapped_column(String)
+    payload_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
+
+
+class TicketRequest(Base):
+    __tablename__ = "ticket_requests"
+    __table_args__ = (UniqueConstraint("ticket_id", "operation", "actor_type", "actor_subject", "request_id",
+                                      name="uq_ticket_request_actor"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ticket_id: Mapped[str] = mapped_column(ForeignKey("after_sales_tickets.id"), index=True)
+    operation: Mapped[str] = mapped_column(String(32))
+    actor_type: Mapped[str] = mapped_column(String(32))
+    actor_subject: Mapped[str] = mapped_column(String)
+    request_id: Mapped[str] = mapped_column(String(128))
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    response_status: Mapped[int] = mapped_column(Integer)
+    response_json: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
+
+
+class ConversationSummaryRecord(Base):
+    __tablename__ = "conversation_summaries"
+
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id"), primary_key=True)
+    customer_id: Mapped[str] = mapped_column(ForeignKey("customers.id"), index=True)
+    summary_text: Mapped[str] = mapped_column(String)
+    covered_message_id: Mapped[int] = mapped_column(Integer)
+    updated_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
+
+
+class KnowledgeDocument(Base):
+    __tablename__ = "knowledge_documents"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    title: Mapped[str] = mapped_column(String)
+    category: Mapped[str] = mapped_column(String)
+    model_code: Mapped[str | None] = mapped_column(String, index=True)
+    revision: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String, default="active")
+    source_path: Mapped[str] = mapped_column(String)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    indexed_at: Mapped[datetime | None] = mapped_column(TZDateTime())

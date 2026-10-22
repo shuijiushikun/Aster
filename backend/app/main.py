@@ -15,6 +15,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app import redis as shared
 from app import tracing
+from app.after_sales.router import router as after_sales_router
 from app.agent.llm import primary_model_name
 from app.agent.runner import (
     ConversationNotFound,
@@ -97,6 +98,7 @@ if settings.cors_origin_list:
     )
 app.add_middleware(RequestContextMiddleware, max_body_bytes=settings.max_request_bytes)
 app.include_router(demo_router)
+app.include_router(after_sales_router)
 
 
 @app.exception_handler(Exception)

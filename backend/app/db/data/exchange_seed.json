@@ -1,0 +1,16 @@
+{
+  "products": [
+    {"id": "PRD-HEADPHONE-01", "name": "无线耳机", "category": "digital", "model_code": "HP-01"},
+    {"id": "PRD-TSHIRT-01", "name": "基础款T恤", "category": "apparel", "model_code": "TSHIRT-01"}
+  ],
+  "customers": [
+    {"id": "CUST-EX-001", "name": "换货演示客户一", "email": "exchange-one@example.com"},
+    {"id": "CUST-EX-002", "name": "换货演示客户二", "email": "exchange-two@example.com"}
+  ],
+  "orders": [
+    {"id": "ORD-EX-1001", "customer_id": "CUST-EX-001", "product_id": "PRD-HEADPHONE-01", "amount": "129.99", "delivered_days_ago": 6, "is_final_sale": false},
+    {"id": "ORD-EX-1002", "customer_id": "CUST-EX-001", "product_id": "PRD-TSHIRT-01", "amount": "29.90", "delivered_days_ago": 8, "is_final_sale": false},
+    {"id": "ORD-EX-2001", "customer_id": "CUST-EX-002", "product_id": "PRD-HEADPHONE-01", "amount": "129.99", "delivered_days_ago": 40, "is_final_sale": false},
+    {"id": "ORD-EX-2002", "customer_id": "CUST-EX-002", "product_id": "PRD-TSHIRT-01", "amount": "19.90", "delivered_days_ago": 5, "is_final_sale": true}
+  ]
+}

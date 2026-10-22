@@ -27,10 +27,11 @@ from langchain_core.tools import tool
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app.after_sales.locking import begin_order_write, lock_order
+from app.after_sales.refunds import evaluate_refund, reject_active_on_refund
 from app.db import session as db
 from app.db.models import Customer, Order, Refund
 from app.localization import product_name
-from app.policy.engine import evaluate
 
 log = logging.getLogger(__name__)
 
@@ -87,9 +88,10 @@ def _build_tools() -> list:
     ) -> tuple[Order | None, str | None]:
         stmt = select(Order).where(Order.id == order_id)
         if for_update:
-            # PostgreSQL 在当前事务内锁住订单行，其他修改该行的事务需要等待。
-            stmt = stmt.with_for_update()
-        order = await session.scalar(stmt)
+            await begin_order_write(session)
+            order = await lock_order(session, order_id)
+        else:
+            order = await session.scalar(stmt)
         if order is None:
             return None, json.dumps(
                 {"error": "order_not_found", "order_id": order_id}
@@ -176,7 +178,7 @@ def _build_tools() -> list:
             if err:
                 return err
             customer = await session.get(Customer, ctx.verified_customer_id)
-            result = evaluate(order, customer)
+            result = await evaluate_refund(session, order, customer)
         return json.dumps({"order_id": order_id, **result.to_dict()})
 
     @tool
@@ -198,7 +200,7 @@ def _build_tools() -> list:
             if err:
                 return err
             customer = await session.get(Customer, ctx.verified_customer_id)
-            result = evaluate(order, customer)
+            result = await evaluate_refund(session, order, customer)
             decision = result.decision  # approved：批准；denied：拒绝；escalated：转人工。
             reasons = list(result.reasons)
             amount = order.amount
@@ -216,6 +218,7 @@ def _build_tools() -> list:
             )
             if decision == "approved":
                 order.refunded = True
+                await reject_active_on_refund(session, order.id)
             try:
                 await session.commit()
             except IntegrityError:
@@ -264,7 +267,7 @@ def _build_tools() -> list:
             if err:
                 return err
             customer = await session.get(Customer, ctx.verified_customer_id)
-            result = evaluate(order, customer)
+            result = await evaluate_refund(session, order, customer)
             if not (result.eligible and result.requires_escalation):
                 return json.dumps(
                     {

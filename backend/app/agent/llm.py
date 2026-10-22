@@ -51,6 +51,31 @@ def _build(provider: str, max_retries: int | None = None):
             max_retries=retries,
         )
 
+    if provider == "deepseek":
+        import httpx
+        from langchain_openai import ChatOpenAI
+
+        if not settings.deepseek_api_key.strip():
+            raise RuntimeError("LLM_PROVIDER=deepseek but DEEPSEEK_API_KEY is not set.")
+        if not settings.deepseek_base_url.strip():
+            raise RuntimeError("LLM_PROVIDER=deepseek but DEEPSEEK_BASE_URL is not set.")
+        return ChatOpenAI(
+            model=settings.deepseek_model,
+            base_url=settings.deepseek_base_url,
+            api_key=settings.deepseek_api_key,
+            temperature=0,
+            # 当前 ChatOpenAI 会将 max_tokens 改写成 max_completion_tokens；
+            # DeepSeek 的合同使用 max_tokens，因此在 extra_body 中传入。
+            extra_body={
+                "thinking": {"type": "disabled"},
+                "max_tokens": settings.max_output_tokens,
+            },
+            timeout=httpx.Timeout(settings.llm_timeout_s, connect=settings.llm_connect_timeout_s),
+            max_retries=retries,
+            use_responses_api=False,
+            stream_usage=True,
+        )
+
     if provider == "omniroute":
         import httpx
         from langchain_openai import ChatOpenAI
@@ -94,7 +119,7 @@ def _build(provider: str, max_retries: int | None = None):
 
     raise RuntimeError(
         f"Unknown LLM provider '{provider}'. "
-        "Use 'anthropic', 'openai', 'gemini', 'omniroute' or 'fake'."
+        "Use 'anthropic', 'openai', 'gemini', 'deepseek', 'omniroute' or 'fake'."
     )
 
 
@@ -132,6 +157,7 @@ def primary_model_name() -> str:
         "anthropic": settings.anthropic_model,
         "openai": settings.openai_model,
         "gemini": settings.gemini_model,
+        "deepseek": settings.deepseek_model,
         # 代理返回上游模型 ID 时会去掉路由前缀，
         # 例如 `cx/gpt-5.6-sol-medium` 返回为 `gpt-5.6-sol-medium`。
         "omniroute": settings.omniroute_model.rsplit("/", 1)[-1],

@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     # "prod" 要求配置真实密钥、Redis 和 Postgres。
     env: str = "dev"
 
-    # 模型供应商："anthropic"、"openai"、"gemini"、"omniroute"
+    # 模型供应商："anthropic"、"openai"、"gemini"、"deepseek"、"omniroute"
     # （兼容 OpenAI 的代理服务）或 "fake"（供压力测试使用的脚本模型）。
     llm_provider: str = "anthropic"
     anthropic_api_key: str = ""
@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-sonnet-4-6"
     openai_model: str = "gpt-4o"
     gemini_model: str = "gemini-3.8-flash"
+    # DeepSeek 使用兼容 OpenAI 的非思考模式，密钥不复用其他供应商。
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com"
+    deepseek_model: str = "deepseek-flash"
     # 兼容 OpenAI 的代理服务（如 OmniRoute）。模型 ID 决定推理强度：
     # 智能体退款决策使用 `…-medium`；语气评估等低成本辅助任务
     # 使用 OMNIROUTE_JUDGE_MODEL。
@@ -116,6 +120,7 @@ class Settings(BaseSettings):
 
     # 退款规则参数：集中配置，供规则引擎和规则文档共用。
     return_window_days: int = 30
+    exchange_window_days: int = 30
     escalation_threshold: float = 500.0
 
     # 请求、模型用量与运行边界。
@@ -199,6 +204,8 @@ class Settings(BaseSettings):
             return bool(self.openai_api_key)
         if self.llm_provider == "gemini":
             return bool(self.gemini_api_key)
+        if self.llm_provider == "deepseek":
+            return bool(self.deepseek_api_key.strip() and self.deepseek_base_url.strip())
         if self.llm_provider == "omniroute":
             return bool(self.omniroute_api_key and self.omniroute_base_url)
         return self.llm_provider == "fake"
