@@ -45,6 +45,8 @@ from app import tracing
 from app.agent.graph import get_agent
 from app.agent.llm import primary_model_name, use_prompt_caching
 from app.agent.prompts import get_system_prompt
+from app.agent.runtime import TurnRuntime
+from app.agent.streaming import GraphEvents, message_text
 from app.agent.tools import ToolContext, tool_config
 from app.config import get_settings
 from app.db import session as db
@@ -343,12 +345,16 @@ async def run_agent_turn(
     # 已验证的身份通过执行配置传给工具，不能由模型在工具参数中随意指定客户。
     ctx = ToolContext(conversation_id=cid, verified_customer_id=customer_id)
     agent = get_agent(scripted=scripted)
+    runtime = TurnRuntime()
+    v2 = settings.agent_v2_enabled and not scripted
+    adapter = GraphEvents(v2=v2)
     tracer = tracing.tracer_for_turn(cid, customer_id, scripted=scripted)
     run_config = {
         "recursion_limit": settings.agent_recursion_limit,
-        "run_name": "refund-turn",
+        "run_name": "after-sales-turn" if v2 else "refund-turn",
         **tool_config(ctx),
     }
+    run_config["configurable"]["turn_runtime"] = runtime
     if tracer is not None:
         run_config["callbacks"] = [tracer]
     primary_model = primary_model_name()
@@ -360,6 +366,27 @@ async def run_agent_turn(
     approved_in_turn = False
     decision_in_turn: str | None = None
     fallback_in_turn = False
+
+    async def drain_usage():
+        nonlocal fallback_in_turn
+        while runtime.usage:
+            usage = runtime.usage.pop(0)
+            node = usage.pop("node")
+            model = usage["model"]
+            if model and not scripted and not model.startswith(primary_model):
+                fallback_in_turn = True
+                LLM_FALLBACKS.labels(model).inc()
+            if scripted:
+                continue
+            if usage["status"] == "unknown":
+                yield await emit("usage", node, usage)
+                continue
+            tin, tout = int(usage["input_tokens"]), int(usage["output_tokens"])
+            LLM_TOKENS.labels("input").inc(tin)
+            LLM_TOKENS.labels("output").inc(tout)
+            await shared.add_customer_tokens(customer_id, tin + tout)
+            yield await emit("usage", node, usage, tokens=tin + tout)
+
     TURNS_IN_FLIGHT.inc()
     try:
         # 总超时限制整轮问答；recursion_limit 另行限制图的执行步数，防止工具循环不结束。
@@ -368,30 +395,23 @@ async def run_agent_turn(
             async for chunk in agent.astream(
                 {"messages": messages},
                 stream_mode="updates",
+                subgraphs=True,
                 config=run_config,
             ):
-                for node, update_ in chunk.items():
-                    for msg in update_.get("messages", []):
+                async for usage_event in drain_usage():
+                    yield usage_event
+                for kind, node, item in adapter.adapt(chunk):
+                    if kind == "final":
+                        final_text = item
+                    elif kind == "domain":
+                        await broadcaster.publish(cid, item)
+                        yield item
+                    else:
+                        msg = item
                         if isinstance(msg, AIMessage):
-                            usage = getattr(msg, "usage_metadata", None)
-                            meta = getattr(msg, "response_metadata", None) or {}
-                            model = meta.get("model") or meta.get("model_name") or ""
-                            if model and not scripted and not model.startswith(primary_model):
-                                # 返回的模型标识与主模型不同时，记录本轮使用过备用模型。
-                                fallback_in_turn = True
-                                LLM_FALLBACKS.labels(model).inc()
-                            if isinstance(msg.content, str) and msg.content.strip():
-                                yield await emit("model", node, {"text": msg.content})
-                                final_text = msg.content
-                            elif isinstance(msg.content, list):
-                                text = "".join(
-                                    b.get("text", "")
-                                    for b in msg.content
-                                    if isinstance(b, dict) and b.get("type") == "text"
-                                )
-                                if text.strip():
-                                    yield await emit("model", node, {"text": text})
-                                    final_text = text
+                            text = message_text(msg)
+                            if text.strip():
+                                yield await emit("model", node, {"text": text})
                             # 此处记录并展示调用请求；实际执行发生在 graph.py 的 tools 节点。
                             for call in msg.tool_calls or []:
                                 TOOL_CALLS.labels(call["name"]).inc()
@@ -399,19 +419,6 @@ async def run_agent_turn(
                                     "tool_call",
                                     node,
                                     {"tool": call["name"], "args": call.get("args", {})},
-                                )
-                            # 每次模型调用分别累计输入/输出词元，用于页面展示和后续额度检查。
-                            if usage and not scripted:
-                                tin = int(usage.get("input_tokens", 0))
-                                tout = int(usage.get("output_tokens", 0))
-                                LLM_TOKENS.labels("input").inc(tin)
-                                LLM_TOKENS.labels("output").inc(tout)
-                                await shared.add_customer_tokens(customer_id, tin + tout)
-                                yield await emit(
-                                    "usage",
-                                    node,
-                                    {"input_tokens": tin, "output_tokens": tout, "model": model},
-                                    tokens=tin + tout,
                                 )
                         elif isinstance(msg, ToolMessage):
                             try:
@@ -432,6 +439,9 @@ async def run_agent_turn(
                                 {"tool": msg.name, "result": result},
                             )
     except Exception as exc:  # 处理模型或供应商错误、超时及递归次数超限。
+        # A provider may have completed earlier calls before another node failed.
+        async for usage_event in drain_usage():
+            yield usage_event
         # 详细异常留在后端日志，前端只收到通用提示，避免暴露服务配置或内部细节。
         log_event(
             logger,

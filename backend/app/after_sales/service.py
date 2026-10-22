@@ -127,6 +127,7 @@ class TicketService:
         data: ExchangeInput,
         *,
         origin_conversation_id: str | None = None,
+        start_open: bool = False,
     ) -> AfterSalesTicket:
         _require_role(principal, "customer")
         try:
@@ -164,7 +165,8 @@ class TicketService:
                     reason_type=data.reason_type,
                     requested_change=data.requested_change,
                     evidence_refs=[ref.model_dump() for ref in data.evidence_refs],
-                    status=result.status,
+                    # T4 commits the request; the T5 workflow will advance OPEN.
+                    status="OPEN" if start_open and result.status != "REJECTED" else result.status,
                     created_at=submitted_at,
                     updated_at=submitted_at,
                     last_error_code=result.code,

@@ -120,7 +120,7 @@ python -m scripts.commerce_mcp_smoke
 
 调用链为 `LangChain 工具适配器 → MCP Client → Commerce MCP Server → 数据库`。适配器从后端已验证的 `ToolContext` 取得客户身份，签发有效期 60 秒、限定 audience 的内部令牌；商城服务重新验证并在 SQL 中过滤订单归属。模型参数没有 `customer_id`，他人记录与不存在记录统一返回 `NOT_FOUND`。成功数据与错误均经 Pydantic 合同校验，PostgreSQL 查询使用只读事务。
 
-超时和离线分别返回 `MCP_TIMEOUT`、`MCP_UNAVAILABLE`，默认每次最多重试一次，本轮失败后停止后续商城调用；没有本地写入兜底。T2 已提供可调用的工具适配器，新 Order Agent 在 T4 绑定这四个工具；现有退款聊天流程继续使用原工具。服务仅在本机监听，不提供退款、审批、换货执行或其他写工具。
+超时和离线分别返回 `MCP_TIMEOUT`、`MCP_UNAVAILABLE`，默认每次最多重试一次，本轮失败后停止后续商城调用；没有本地写入兜底。Order Agent 使用这四个工具；退款子图继续使用原退款工具。服务仅在本机监听，不提供退款、审批、换货执行或其他写工具。
 
 ## 售后知识检索
 
@@ -169,6 +169,14 @@ python -m app.rag.evaluate --live --out var/retrieval-evaluation.json
 | Hybrid + Rerank | 11/12 | 11/12 | 4/4 | 1941 ms |
 
 三种模式引用有效率均为 100%，跨型号误检和依赖错误均为 0。独立校准得到本地阈值 `0.734367`，评测中的 E05（平铺胸宽与人体胸围区别）被误判为无证据；未用评测集重新调阈值。当前默认打开 Hybrid + Rerank，以这组样本的首条命中改善为依据；纯 Hybrid 未显示收益。结果只适用于此小型语料，耗时不含共享查询向量化且不代表稳定性能基准；原始报告由上述命令生成于忽略的 `backend/var/`。
+
+## 聊天编排
+
+在后端 `.env` 设置 `AGENT_V2_ENABLED=true`，并分别启动 FastAPI 和上面的 Commerce MCP 进程。配置好 DeepSeek、知识索引及百炼/Qdrant 后，聊天会先用结构化 Router 区分退款、换货申请、知识咨询、订单查询和工单跟进。设为 `false` 可切回原退款聊天；退款/换货互斥和数据库约束始终有效。公开演示额度耗尽时仍使用原零费用脚本模型。
+
+Order Agent 只能调用只读 MCP 工具，每轮最多 3 次；Knowledge Agent 只能检索 LlamaIndex，商品范围从已验证订单或商品目录确定。普通查询和工单跟进不会创建工单。明确申请换货时，需要唯一的本人订单与足够知识证据，模型提案经过后端核验，再调用领域服务创建或返回已有工单。新工单停在 `OPEN`，此阶段不启动审批工作流，也不代表换货已批准或受理。
+
+SSE 保留原事件，增加 `knowledge_sources` 和 `ticket_update`。客户正式消息只取图的 `final_response`，中间 JSON 和专业代理文本仅为执行步骤；所有模型调用统一记录用量，缺失用量标为 `unknown`。入口：`app/agent/chat_graph.py`；事件适配：`streaming.py`；用量入口：`runtime.py`。
 
 ## DeepSeek
 

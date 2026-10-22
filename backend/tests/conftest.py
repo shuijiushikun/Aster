@@ -41,10 +41,14 @@ async def engine(tmp_path):
 
 
 @pytest.fixture(autouse=True)
-def reset_primary_breaker():
+def reset_primary_breaker(monkeypatch):
     """The model circuit breaker is per-process state; start each test closed."""
     from app.agent import graph
+    from app.config import get_settings
 
+    # Legacy tests stay independent of the developer's local rollout switch.
+    # V2 tests explicitly enable the new graph in their own fixture.
+    monkeypatch.setattr(get_settings(), "agent_v2_enabled", False)
     graph.breaker.open_until = 0.0
     yield
     graph.breaker.open_until = 0.0

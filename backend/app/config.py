@@ -149,6 +149,7 @@ class Settings(BaseSettings):
     escalation_threshold: float = 500.0
 
     # 请求、模型用量与运行边界。
+    agent_v2_enabled: bool = False
     max_message_chars: int = 2000
     max_conversation_turns: int = 30
     max_conversation_tokens: int = 60000

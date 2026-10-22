@@ -218,8 +218,13 @@ async def test_fallback_provider_answers_when_primary_fails(monkeypatch, engine,
     assert LLM_FALLBACKS.labels("gpt-4o-2024-08-06")._value.get() == before + 2
     # ...and its model is recorded on the usage steps.
     usage = [e for e in events if e.get("kind") == "step" and e["step_type"] == "usage"]
-    assert len(usage) == 2
-    assert all(e["payload"]["model"] == "gpt-4o-2024-08-06" for e in usage)
+    assert len(usage) == 3
+    reported = [e for e in usage if e["payload"]["status"] == "reported"]
+    assert len(reported) == 2
+    assert all(e["payload"]["model"] == "gpt-4o-2024-08-06" for e in reported)
+    # A failed provider attempt may still incur cost; do not invent zero usage.
+    unknown = [e for e in usage if e["payload"]["status"] == "unknown"]
+    assert len(unknown) == 1 and unknown[0]["payload"]["input_tokens"] is None
     # The fallback is bound by the same gate: the final-sale order stays unrefunded.
     assert await approved("ORD-1002") == []
     assert _decision_events(events)[-1]["payload"]["result"]["decision"] == "denied"

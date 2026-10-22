@@ -9,11 +9,13 @@ import logging
 import time
 from typing import Annotated, TypedDict
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
 from app.agent.llm import get_chat_model, get_fallback_model, get_model
+from app.agent.runtime import invoke_model
 from app.agent.tools import TOOLS
 from app.config import get_settings
 from app.observability import log_event
@@ -66,6 +68,10 @@ def get_agent(scripted: bool = False):
         model, fallback = get_model("fake"), None
     else:
         model, fallback = get_chat_model(), get_fallback_model()
+    if get_settings().agent_v2_enabled and not scripted:
+        from app.agent.chat_graph import compile_chat_graph
+
+        return compile_chat_graph(model, fallback)
     cached = _cache.get(scripted)
     if cached is not None and cached[0] is model and cached[1] is fallback:
         return cached[2]
@@ -82,16 +88,16 @@ def _compile(model, fallback):
     tool_node = ToolNode(tools)
 
     # 每次进入 agent 节点都调用一次模型；同一轮问答可能在执行工具后再次调用模型。
-    async def agent_node(state: AgentState) -> dict:
+    async def agent_node(state: AgentState, config: RunnableConfig) -> dict:
         messages = state["messages"]
         if secondary is None:
-            return {"messages": [await primary.ainvoke(messages)]}
+            return {"messages": [await invoke_model(primary, messages, config, node="agent")]}
         if not breaker.is_open():
             try:
-                return {"messages": [await primary.ainvoke(messages)]}
+                return {"messages": [await invoke_model(primary, messages, config, node="agent")]}
             except Exception as exc:  # 主模型异常时触发熔断；有备用模型才会进入此分支。
                 breaker.trip(exc)
-        return {"messages": [await secondary.ainvoke(messages)]}
+        return {"messages": [await invoke_model(secondary, messages, config, node="agent")]}
 
     # 模型返回 tool_calls 就去执行工具；没有工具调用时结束本轮图执行。
     def should_continue(state: AgentState):
