@@ -13,6 +13,8 @@ import type {
   TicketDecisionRequest,
   TicketStatus,
   TicketSummary,
+  TicketDetail,
+  TicketSupplementRequest,
 } from "./types";
 
 export class ApiError extends Error {
@@ -74,6 +76,7 @@ async function request(role: Role | null, url: string, init: RequestInit = {}): 
     try {
       const body = await res.json();
       if (typeof body?.detail === "string") detail = body.detail;
+      else if (typeof body?.detail?.message === "string") detail = body.detail.message;
     } catch {
       /* 错误响应体不是 JSON，继续使用默认提示。 */
     }
@@ -183,8 +186,28 @@ export async function createDemoSession(turnstileToken?: string): Promise<DemoSe
   return res.json();
 }
 
-export async function fetchOrders(): Promise<Order[]> {
-  return (await request("customer", "/api/me/orders")).json();
+export async function fetchOrders(signal?: AbortSignal): Promise<Order[]> {
+  return (await request("customer", "/api/me/orders", { signal })).json();
+}
+
+export async function fetchMyTickets(signal?: AbortSignal): Promise<TicketSummary[]> {
+  return (await request("customer", "/api/me/tickets", { signal })).json();
+}
+
+export async function fetchMyTicket(id: string, signal?: AbortSignal): Promise<TicketDetail> {
+  return (await request("customer", `/api/me/tickets/${encodeURIComponent(id)}`, { signal })).json();
+}
+
+export async function supplementMyTicket(id: string, data: TicketSupplementRequest, signal?: AbortSignal): Promise<TicketAccepted> {
+  return (await request("customer", `/api/me/tickets/${encodeURIComponent(id)}/supplement`, {
+    method: "POST", body: JSON.stringify(data), signal,
+  })).json();
+}
+
+export async function cancelMyTicket(id: string, data: { request_id: string }, signal?: AbortSignal): Promise<TicketAccepted> {
+  return (await request("customer", `/api/me/tickets/${encodeURIComponent(id)}/cancel`, {
+    method: "POST", body: JSON.stringify(data), signal,
+  })).json();
 }
 
 export async function fetchStats(): Promise<AdminStats> {

@@ -7,6 +7,5 @@
 const env = import.meta.env;
 
 export const API_BASE = (env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
-export const REPO_URL = env.VITE_REPO_URL || "https://github.com/LikhithV02/Customer-Support-Agent";
 
 export const apiUrl = (path: string) => `${API_BASE}${path}`;

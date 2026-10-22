@@ -37,15 +37,15 @@ import time
 import uuid
 from collections.abc import AsyncIterator
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-from sqlalchemy import insert, select, update
+from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
+from sqlalchemy import insert, update
 
 from app import redis as shared
 from app import tracing
 from app.agent.graph import get_agent
 from app.agent.llm import primary_model_name, use_prompt_caching
 from app.agent.prompts import get_system_prompt
-from app.agent.runtime import TurnRuntime
+from app.agent.runtime import ModelCalls, TurnRuntime
 from app.agent.streaming import GraphEvents, message_text
 from app.agent.tools import ToolContext, tool_config
 from app.config import get_settings
@@ -65,9 +65,6 @@ from app.observability import (
 )
 
 logger = logging.getLogger(__name__)
-
-# 限制带入模型的历史消息数量，防止上下文无限增长。
-_HISTORY_LIMIT = 40
 
 _ERROR_MESSAGE = "抱歉，处理请求时服务出现异常，请稍后重试。"
 
@@ -197,20 +194,14 @@ async def load_owned_conversation(customer_id: str, conversation_id: str) -> Con
 
 
 async def _history(conversation_id: str) -> list:
+    from app.agent.memory import load_context
+
     async with db.SessionLocal() as session:
-        rows = (
-            await session.scalars(
-                select(Message)
-                .where(Message.conversation_id == conversation_id)
-                .order_by(Message.id.desc())
-                .limit(_HISTORY_LIMIT)
-            )
-        ).all()
-    # 查询先取最新的有限条消息，再反转为时间正序，作为本轮模型的对话上下文。
-    return [
-        HumanMessage(m.content) if m.role == "user" else AIMessage(m.content)
-        for m in reversed(rows)
-    ]
+        convo = await session.get(Conversation, conversation_id)
+        if convo is None or not convo.customer_id:
+            raise ConversationNotFound(conversation_id)
+        customer_id = convo.customer_id
+    return await load_context(customer_id, conversation_id)
 
 
 def _system_message() -> SystemMessage:
@@ -296,13 +287,38 @@ async def run_agent_turn(
         return event
 
     # 最终回复单独保存为聊天消息；右侧的工具调用等执行事件另存于 ReasoningEvent。
-    async def finish(final_text: str, outcome: str) -> list[dict]:
+    async def finish(final_text: str, outcome: str, *, summarize=False) -> list[dict]:
         await _save_message(cid, "assistant", final_text)
+        usage_events = []
+        if summarize and not scripted:
+            from app.agent.graph import get_chat_model, get_fallback_model
+            from app.agent.memory import maybe_summarize
+
+            try:
+                remaining = settings.turn_timeout_s - (time.perf_counter() - started)
+                if remaining > 0:
+                    # Bound preparation and persistence as well as the provider call.
+                    async with asyncio.timeout(min(remaining, settings.summary_timeout_s)):
+                        async with db.SessionLocal() as session:
+                            tokens = (await session.get(Conversation, cid)).tokens_used or 0
+                        global_cap = settings.demo_global_daily_token_budget if settings.is_demo else 0
+                        if (tokens < settings.max_conversation_tokens
+                                and await shared.customer_tokens_today(customer_id) < settings.customer_daily_token_budget
+                                and (not global_cap or await shared.global_tokens_today() < global_cap)):
+                            await maybe_summarize(
+                                customer_id, cid, ModelCalls(get_chat_model(), get_fallback_model()), run_config,
+                            )
+            except Exception as exc:
+                logger.warning("summary preparation failed error_type=%s", type(exc).__name__)
+            finally:
+                # Cancellation may still represent a charged provider attempt.
+                async for event in drain_usage():
+                    usage_events.append(event)
         final_event = {"kind": "message", "role": "assistant", "content": final_text}
         await broadcaster.publish(cid, final_event)
         TURNS.labels(outcome).inc()
         TURN_LATENCY.observe(time.perf_counter() - started)
-        return [final_event, {"kind": "done"}]
+        return [*usage_events, final_event, {"kind": "done"}]
 
     yield {"kind": "conversation", "conversation_id": cid}
 
@@ -359,9 +375,6 @@ async def run_agent_turn(
         run_config["callbacks"] = [tracer]
     primary_model = primary_model_name()
 
-    # 当前用户消息已写入历史，这里不重复拼接。
-    messages = [_system_message()] + await _history(cid)
-
     final_text = ""
     approved_in_turn = False
     decision_in_turn: str | None = None
@@ -391,6 +404,9 @@ async def run_agent_turn(
     try:
         # 总超时限制整轮问答；recursion_limit 另行限制图的执行步数，防止工具循环不结束。
         async with asyncio.timeout(settings.turn_timeout_s):
+            # The saved current user message appears exactly once in owned context.
+            messages = await _history(cid)
+            messages[0] = _system_message()
             # updates 按节点输出消息更新，不是逐个字的流；一次问答可能经过多个模型/工具节点。
             async for chunk in agent.astream(
                 {"messages": messages},
@@ -496,5 +512,5 @@ async def run_agent_turn(
     if trace:
         yield await emit("trace", "opik", trace)
 
-    for event in await finish(final_text, "ok"):
+    for event in await finish(final_text, "ok", summarize=True):
         yield event

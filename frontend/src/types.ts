@@ -40,12 +40,28 @@ export interface ErrorEvent {
   message: string;
 }
 
+export interface KnowledgeSource {
+  document_id: string;
+  title?: string;
+  revision: string;
+  chunk_index?: number;
+  excerpt: string;
+  references?: string[];
+  source_path?: string;
+}
+
+export type DomainEvent =
+  | { kind: "knowledge_sources"; sources: KnowledgeSource[] }
+  | { kind: "ticket_update"; ticket_id: string; status: TicketStatus; order_id?: string; reference_code?: string }
+  | { kind: "workflow_status"; ticket_id: string; state?: string; status?: string; phase?: string };
+
 export type AgentEvent =
   | StepEvent
   | MessageEvent
   | ConversationEvent
   | DoneEvent
-  | ErrorEvent;
+  | ErrorEvent
+  | DomainEvent;
 
 export interface ChatMessage {
   id: string;
@@ -146,8 +162,7 @@ export interface TicketSummary {
   last_error_code: string | null;
 }
 
-export interface AdminTicketDetail extends TicketSummary {
-  customer_id: string;
+export interface TicketDetail extends TicketSummary {
   reason_type: string | null;
   requested_change: string | null;
   evidence_refs: {
@@ -164,6 +179,10 @@ export interface AdminTicketDetail extends TicketSummary {
     payload_json: Record<string, unknown>;
     created_at: string;
   }[];
+}
+
+export interface AdminTicketDetail extends TicketDetail {
+  customer_id: string;
   order: {
     id: string;
     product_id: string | null;
@@ -180,6 +199,13 @@ export interface AdminTicketDetail extends TicketSummary {
     created_at: string;
   } | null;
   last_error_message: string | null;
+}
+
+export interface TicketSupplementRequest {
+  request_id: string;
+  description: string;
+  reason_type?: "size" | "defect";
+  requested_change?: string;
 }
 
 export interface TicketDecisionRequest {

@@ -1,6 +1,6 @@
-# ACME 智能退款客服
+# 智能售后工作台
 
-基于 FastAPI、LangGraph 和 React 的客服演示项目。客户可以用中文查询自己的订单、申请退款；管理控制台实时显示工具调用、规则校验和实际处理结果。
+基于 FastAPI、LangGraph 和 React 的售后 Agent 项目。客户可以查询本人订单、检索商品说明、申请模拟退款或换货，并在工单中补充文本、取消审批前的申请；管理员审核工单、查看执行记录或继续中断流程。
 
 核心原则：**大模型提出请求，代码决定能否退款。** 身份来自签名 JWT，退款工具会在写入数据库前重新检查规则，并通过行锁和唯一索引防止重复成功退款。
 
@@ -20,7 +20,7 @@ npm install
 npm run dev
 ```
 
-前端开发地址以终端输出为准，API 代理配置在 `frontend/vite.config.ts`。本地空数据库需要按原配置启用 `SEED_ON_STARTUP=true`；不要对已有数据执行重置。
+前端开发地址以终端输出为准，API 代理配置在 `frontend/vite.config.ts`。`backend/.env` 保存本机配置；已有数据时保持 `SEED_ON_STARTUP=false`。新空库可显式运行下文演示数据命令，或启用仅对空库生效的 `SEED_ON_STARTUP=true`。
 
 新建本地演示数据库时，先在后端目录运行 `python -m alembic upgrade head`，再启动服务。数据库地址由 `DATABASE_URL` 决定；迁移与应用必须使用同一份配置。未设置时使用 `backend/var/app.db`，不会自动连接 PostgreSQL。
 
@@ -60,8 +60,9 @@ API 路径、工具名、数据库字段、状态值和环境变量保留英文�
 3. `backend/app/agent/runner.py`：会话历史、事件持久化、用量限制和中英文成功声明校验。
 4. `backend/app/agent/tools.py`：身份与订单归属校验、规则复核、退款落库和防重。
 5. `backend/app/policy/engine.py`：确定性退款规则。
-6. `frontend/src/api.ts`：请求、中文错误处理与 SSE 解析。
-7. `frontend/src/lib/locale.ts`：中文工具名称、告警说明与日期展示。
+6. `backend/app/agent/context.py`、`memory.py`：上下文预算、相关工单与增量摘要。
+7. `frontend/src/api.ts`：请求、中文错误处理与 SSE 解析。
+8. `frontend/src/lib/locale.ts`：中文工具名称、状态与日期展示。
 
 回复中的成功声明会与本轮退款工具的真实结果核对；是否允许退款始终由工具内的确定性规则校验决定。本项目记录模拟退款账本，没有接入真实支付。
 
@@ -71,14 +72,22 @@ API 路径、工具名、数据库字段、状态值和环境变量保留英文�
 
 待受理期间仍按原规则允许退款，退款成功会在同一事务内终止活跃换货工单；换货受理成功后禁止退款。审批和受理需要持久化业务事实，模型不能直接批准换货。
 
-先在后端目录升级数据库，再按需添加独立的换货演示样本：
+先在后端目录升级数据库，再按需增量添加本项目的售后演示样本：
 
 ```powershell
 python -m alembic upgrade head
-python -m app.db.seed --exchange-samples
+python -m app.db.seed --demo-samples
 ```
 
-新增样本包含 2 款商品、2 名客户和 4 个订单，重复运行只添加缺失样本，不重置原退款数据。普通样本客户为 `CUST-EX-001`，订单为 `ORD-EX-1001`、`ORD-EX-1002`；`CUST-EX-002` 的两个订单分别演示超期和清仓拒绝。
+样本包含 2 款商品、3 名中文虚构客户、13 个订单和 5 张示例工单，全部金额为 USD。商品对应知识库的 `HP-01` 耳机和 `TSHIRT-01` 服装，订单均关联商品目录。重复执行只添加缺失样本，不更新已有订单日期、退款或审批，也不重新创建已取消/拒绝的工单；初始化中断时可使用相同命令继续本次 seed 尚未完成的审批/受理步骤。
+
+| 客户 | 可演示内容 |
+|---|---|
+| 林晓 `CUST-DEMO-001` | `ORD-DEMO-1001` 普通退款、`ORD-DEMO-1002` 尺码换货、`ORD-DEMO-1003` 高金额转人工、`ORD-DEMO-1004` 未送达、`ORD-DEMO-1005` 耳机故障换货 |
+| 陈悦 `CUST-DEMO-002` | `ORD-DEMO-2001` 超期、`ORD-DEMO-2002` 清仓、`ORD-DEMO-2003` 已退款；也可验证跨客户访问被拒绝 |
+| 周宁 `CUST-DEMO-003` | `ORD-DEMO-3001` 待补充、`ORD-DEMO-3002` 待审、`ORD-DEMO-3003` 已取消、`ORD-DEMO-3004` 已拒绝、`ORD-DEMO-3005` 已模拟受理 |
+
+示例取消、审批和受理均经领域服务生成业务记录，示例工单关联标记为 `demo-seed:` 的会话；没有接入真实付款或发货。原退款样本和早期换货样本已移至 `backend/tests/fixtures/`，仅供回归测试，不再自动灌入运行时数据库。已有本地旧数据保留；需要从干净状态重复录制时，可为每轮指定新的演示数据库，迁移后重新添加样本。
 
 已提供的工单查询接口均使用现有 Bearer JWT：
 
@@ -106,7 +115,7 @@ T5 已接入独立换货工作流：聊天建单提交后，启动校验并暂�
 
 业务表仍由 Alembic 迁移。后端启动时，由 SDK `setup()` 在同一 PostgreSQL 数据库内维护 checkpoint 表（`checkpoint_migrations`、`checkpoints`、`checkpoint_blobs`、`checkpoint_writes`），数据库账号需有建表/索引权限。进程复用 Saver 与连接池，通过 Redis 工单锁串行推进；`WORKFLOW_TIMEOUT_S` 默认 30 秒，释放锁另有最多 5 秒清理时间，`WORKFLOW_POOL_SIZE` 默认 4。Windows 的 psycopg 异步连接要求 SelectorEventLoop，前文的 `python -m scripts.serve` 已处理；其他平台也可使用此入口。
 
-管理员页面提供最小的查询、审批与恢复入口；客户补充/取消按钮、完整事件展示和上下文记忆在 T6 接入。当前受理仍是本地模拟记录，没有实际发货。
+同一前端项目提供 `/chat` 客户工作台与 `/console` 管理工作台。客户工单入口展示最新状态、补充文本和审批前取消；管理端提供待审列表、批准/拒绝、继续处理与会话记录。操作结果以刷新后的详情为准；网络结果不确定时保留原请求标识，重试不会生成第二次业务受理。界面只提供已实现的操作，没有电话、物流、附件上传等入口。
 
 ## 只读商城 MCP
 
@@ -129,7 +138,7 @@ Commerce MCP Server 由本项目实现，复用官方 Python SDK（固定为本�
 python -m uvicorn app.commerce_mcp.server:create_app --factory --host 127.0.0.1 --port 8001
 ```
 
-使用 T1 的换货样本执行一次只读检查，不调用模型或写业务数据：
+使用上述演示数据执行一次只读检查，不调用模型或写业务数据：
 
 ```powershell
 python -m scripts.commerce_mcp_smoke
@@ -175,7 +184,7 @@ python -m app.rag.evaluate --live --calibrate --out var/retrieval-calibration.js
 python -m app.rag.evaluate --live --out var/retrieval-evaluation.json
 ```
 
-评测共享各模式的真实查询向量，记录 Hit@1/4、引用有效率、跨型号误检、无证据拒答、错误、重排降级及检索耗时（不含共享 Embedding 批次）。拒答阈值只用于当前模型的 dense 余弦分数，不比较 RRF/Rerank 与余弦分数；换模型或语料需重新校准。默认阈值为 0，表示尚未做分数校准，不能宣称能识别所有无关问题。知识不足返回 `insufficient_evidence`，依赖故障返回 `unavailable`。这仍是少量人工标注的演示数据，不能证明通用检索效果，也不能保证候选里的每一段都回答了问题。聊天 Graph 的 Knowledge Agent 绑定留到下一阶段。
+评测共享各模式的真实查询向量，记录 Hit@1/4、引用有效率、跨型号误检、无证据拒答、错误、重排降级及检索耗时（不含共享 Embedding 批次）。拒答阈值只用于当前模型的 dense 余弦分数，不比较 RRF/Rerank 与余弦分数；换模型或语料需重新校准。默认阈值为 0，表示尚未做分数校准，不能宣称能识别所有无关问题。知识不足返回 `insufficient_evidence`，依赖故障返回 `unavailable`。这仍是少量人工标注的演示数据，不能证明通用检索效果，也不能保证候选里的每一段都回答了问题。聊天 Graph 的 Knowledge Agent 已绑定此检索器，并通过 SSE 返回知识来源。
 
 2026-10-22 使用真实百炼与云端 Qdrant 的结果：
 
@@ -193,7 +202,25 @@ python -m app.rag.evaluate --live --out var/retrieval-evaluation.json
 
 Order Agent 只能调用只读 MCP 工具，每轮最多 3 次；Knowledge Agent 只能检索 LlamaIndex，商品范围从已验证订单或商品目录确定。普通查询和工单跟进不会创建工单或自动恢复工作流。明确申请换货时，需要唯一的本人订单与足够知识证据，模型提案经过后端核验，再调用领域服务创建或返回已有工单，并尝试启动审批工作流；建单不代表换货已批准或受理。
 
-SSE 保留原事件，增加 `knowledge_sources` 和 `ticket_update`。客户正式消息只取图的 `final_response`，中间 JSON 和专业代理文本仅为执行步骤；所有模型调用统一记录用量，缺失用量标为 `unknown`。入口：`app/agent/chat_graph.py`；事件适配：`streaming.py`；用量入口：`runtime.py`。
+SSE 保留原事件，增加 `knowledge_sources`、`ticket_update` 和 `workflow_status`。客户正式消息只取图的 `final_response`，中间 JSON 和专业代理文本仅为执行步骤；所有模型调用统一记录用量，缺失用量标为 `unknown`。入口：`app/agent/chat_graph.py`；事件适配：`streaming.py`；用量入口：`runtime.py`。
+
+### 上下文与增量摘要
+
+每轮使用最近 8 条消息（包含当前输入）、当前客户的相关工单事实，以及已覆盖历史的摘要。跨会话跟进会重新查询本人相关工单；读取进度不会自动恢复工作流，也不以摘要中的订单号或审批结论代替数据库校验。
+
+会话达到 12 条消息，且最近 8 条之前还有至少 8 条未摘要消息时，回复保存后尝试增量摘要。摘要及已覆盖的消息指针保存在 PostgreSQL，失败或超时不阻断已生成的回复；摘要调用也计入用量。每次仅处理预算内的连续历史片段，不删除原始消息。
+
+`CONTEXT_MAX_CHARS` 默认 14000，`CONTEXT_EVIDENCE_MAX_CHARS` 默认 1200，`SUMMARY_MAX_CHARS` 默认 1600，`SUMMARY_TIMEOUT_S` 默认 8 秒。上下文超限先裁剪旧消息、摘要和次要证据，保留当前请求、系统规则与关键业务字段；必要内容仍放不下时明确失败。摘要属于辅助上下文，不能授予业务权限。
+
+### 本地演示顺序
+
+先迁移、添加演示样本并建立知识索引，再分别启动商城 MCP、后端和前端。开发菜单可选择上述客户及管理员身份；生产认证模式仍使用签名 JWT。
+
+1. **D1 普通退款**：客户选择林晓，询问 `ORD-DEMO-1001` 并明确申请退款；核对回复、订单退款状态和执行步骤。这里写入的是模拟退款账本。
+2. **D2 换货审批**：林晓说明 `ORD-DEMO-1005` 的 HP-01 右耳无声、重新配对和重置后仍异常，并明确申请同型号换货。核对知识引用和待审工单；切到管理工作台批准，再刷新详情核对模拟受理单。周宁的 `ORD-DEMO-3001` 可演示补充原因和更换要求，`ORD-DEMO-3002` 可演示审批前取消。
+3. **D3 重启与跨会话**：在另一笔换货待审时记录工单号，重启后端并发起新对话询问进度，核对查询没有重复建单；管理员批准并继续处理。重复提交相同请求只返回原接收快照，最终状态以重新查询为准。
+
+演示会修改所选订单。需要从头再演示时使用新的专用演示数据库，不清空已有业务库。需要切回旧退款聊天时设置 `AGENT_V2_ENABLED=false` 并重启后端；这不会删除工单或放宽退款与换货互斥规则。
 
 ## DeepSeek
 

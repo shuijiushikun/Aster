@@ -30,6 +30,7 @@ from app.config import get_settings
 from app.db import session as db
 from app.db.fixtures import scenario_for, scenario_orders
 from app.db.models import Customer
+from app.db.seed import ensure_catalog
 from app.localization import product_name
 from app.observability import REJECTIONS, log_event
 from app.schemas import OrderOut
@@ -102,12 +103,14 @@ async def _create_sandbox() -> tuple[Customer, list]:
     for _ in range(5):
         cid = new_demo_customer_id()
         customer = Customer(
-            id=cid, name="演示客户", email=f"{cid.lower()}@demo.acme.test"
+            id=cid, name="体验客户", email=f"{cid.lower()}@demo.example.test"
         )
         orders = scenario_orders(cid, random.Random())
         try:
             async with db.SessionLocal() as session:
+                await ensure_catalog(session)
                 session.add(customer)
+                await session.flush()
                 session.add_all(orders)
                 await session.commit()
             return customer, orders

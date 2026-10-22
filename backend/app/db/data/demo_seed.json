@@ -1,0 +1,33 @@
+{
+  "products": [
+    {"id": "PRD-HEADPHONE-01", "name": "HP-01 无线耳机", "category": "digital", "model_code": "HP-01"},
+    {"id": "PRD-TSHIRT-01", "name": "TSHIRT-01 基础款T恤", "category": "apparel", "model_code": "TSHIRT-01"}
+  ],
+  "customers": [
+    {"id": "CUST-DEMO-001", "name": "林晓", "email": "linxiao@example.test"},
+    {"id": "CUST-DEMO-002", "name": "陈悦", "email": "chenyue@example.test"},
+    {"id": "CUST-DEMO-003", "name": "周宁", "email": "zhouning@example.test"}
+  ],
+  "orders": [
+    {"id": "ORD-DEMO-1001", "customer_id": "CUST-DEMO-001", "product_id": "PRD-HEADPHONE-01", "amount": "129.99", "delivered_days_ago": 6},
+    {"id": "ORD-DEMO-1002", "customer_id": "CUST-DEMO-001", "product_id": "PRD-TSHIRT-01", "amount": "29.90", "delivered_days_ago": 8},
+    {"id": "ORD-DEMO-1003", "customer_id": "CUST-DEMO-001", "product_id": "PRD-HEADPHONE-01", "amount": "699.00", "delivered_days_ago": 5},
+    {"id": "ORD-DEMO-1004", "customer_id": "CUST-DEMO-001", "product_id": "PRD-HEADPHONE-01", "amount": "129.99", "status": "processing", "delivered_days_ago": null},
+    {"id": "ORD-DEMO-1005", "customer_id": "CUST-DEMO-001", "product_id": "PRD-HEADPHONE-01", "amount": "129.99", "delivered_days_ago": 4},
+    {"id": "ORD-DEMO-2001", "customer_id": "CUST-DEMO-002", "product_id": "PRD-HEADPHONE-01", "amount": "129.99", "delivered_days_ago": 40},
+    {"id": "ORD-DEMO-2002", "customer_id": "CUST-DEMO-002", "product_id": "PRD-TSHIRT-01", "amount": "19.90", "delivered_days_ago": 5, "is_final_sale": true},
+    {"id": "ORD-DEMO-2003", "customer_id": "CUST-DEMO-002", "product_id": "PRD-HEADPHONE-01", "amount": "129.99", "delivered_days_ago": 4, "refunded": true},
+    {"id": "ORD-DEMO-3001", "customer_id": "CUST-DEMO-003", "product_id": "PRD-TSHIRT-01", "amount": "29.90", "delivered_days_ago": 7},
+    {"id": "ORD-DEMO-3002", "customer_id": "CUST-DEMO-003", "product_id": "PRD-HEADPHONE-01", "amount": "129.99", "delivered_days_ago": 5},
+    {"id": "ORD-DEMO-3003", "customer_id": "CUST-DEMO-003", "product_id": "PRD-TSHIRT-01", "amount": "29.90", "delivered_days_ago": 6},
+    {"id": "ORD-DEMO-3004", "customer_id": "CUST-DEMO-003", "product_id": "PRD-HEADPHONE-01", "amount": "129.99", "delivered_days_ago": 8},
+    {"id": "ORD-DEMO-3005", "customer_id": "CUST-DEMO-003", "product_id": "PRD-HEADPHONE-01", "amount": "129.99", "delivered_days_ago": 9}
+  ],
+  "tickets": [
+    {"order_id": "ORD-DEMO-3001", "description": "T恤尺码不合适，申请换货。", "status": "WAITING_INFO"},
+    {"order_id": "ORD-DEMO-3002", "description": "右耳无声，重新配对和重置后仍无法播放。", "reason_type": "defect", "requested_change": "更换同型号 HP-01 耳机", "status": "PENDING_REVIEW"},
+    {"order_id": "ORD-DEMO-3003", "description": "T恤M码偏小，已对照尺寸表测量。", "reason_type": "size", "requested_change": "同款更换L码", "status": "CANCELLED"},
+    {"order_id": "ORD-DEMO-3004", "description": "耳机单侧声音异常，申请更换同款。", "reason_type": "defect", "requested_change": "更换同型号 HP-01 耳机", "status": "REJECTED"},
+    {"order_id": "ORD-DEMO-3005", "description": "左耳无声，清洁、重置和重新配对后未恢复。", "reason_type": "defect", "requested_change": "更换同型号 HP-01 耳机", "status": "COMPLETED"}
+  ]
+}

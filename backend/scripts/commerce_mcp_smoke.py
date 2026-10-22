@@ -59,9 +59,9 @@ async def smoke(args) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--customer-id", default="CUST-EX-001")
-    parser.add_argument("--order-id", default="ORD-EX-1001")
-    parser.add_argument("--other-order-id", default="ORD-EX-2001")
+    parser.add_argument("--customer-id", default="CUST-DEMO-001")
+    parser.add_argument("--order-id", default="ORD-DEMO-1005")
+    parser.add_argument("--other-order-id", default="ORD-DEMO-2001")
     return asyncio.run(smoke(parser.parse_args()))
 
 

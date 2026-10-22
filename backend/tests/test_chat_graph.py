@@ -15,12 +15,12 @@ from app.agent.specialists import compile_specialist
 from app.agent.streaming import GraphEvents
 from app.auth import Principal
 from app.config import get_settings
-from app.db import seed
 from app.db import session as db
 from app.db.models import AfterSalesTicket, Conversation, Message, Refund, utcnow
 from app.mcp.schemas import OrderInfo, OrderPage, ProductInfo, ReadResult, failure
 from app.mcp.tools import build_commerce_tools
 from app.rag.schemas import Evidence, RetrievalResult
+from tests.seed_data import seed_exchange_samples
 
 
 def ai(content="", *, call=None, usage=True):
@@ -142,7 +142,7 @@ class Commerce:
 
 @pytest.fixture
 async def setup_chat(engine, monkeypatch):
-    await seed.seed_exchange_samples()
+    await seed_exchange_samples()
     monkeypatch.setattr(get_settings(), "agent_v2_enabled", True)
     commerce = Commerce()
     monkeypatch.setattr(chat_graph, "build_commerce_tools", lambda: build_commerce_tools(commerce))

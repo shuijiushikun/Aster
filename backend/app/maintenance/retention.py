@@ -19,18 +19,24 @@ import argparse
 import asyncio
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 
 from app.config import get_settings
 from app.db import session as db
 from app.db.models import (
+    AfterSalesTicket,
     Conversation,
     ConversationArchive,
+    ConversationSummaryRecord,
     Customer,
+    ExchangeAcceptance,
     Message,
     Order,
     ReasoningEvent,
     Refund,
+    TicketApproval,
+    TicketEvent,
+    TicketRequest,
 )
 from app.demo import DEMO_PREFIX
 from app.maintenance.archive import archive
@@ -53,6 +59,12 @@ async def purge(days: int, dry_run: bool = False) -> int:
             total += len(ids)
             if dry_run:
                 break
+            # Business tickets survive normal chat retention; the optional link
+            # must not prevent old conversation/summary rows from being removed.
+            await session.execute(update(AfterSalesTicket).where(
+                AfterSalesTicket.origin_conversation_id.in_(ids)).values(origin_conversation_id=None))
+            await session.execute(delete(ConversationSummaryRecord).where(
+                ConversationSummaryRecord.conversation_id.in_(ids)))
             await session.execute(delete(ReasoningEvent).where(ReasoningEvent.conversation_id.in_(ids)))
             await session.execute(delete(Message).where(Message.conversation_id.in_(ids)))
             await session.execute(delete(Conversation).where(Conversation.id.in_(ids)))
@@ -104,6 +116,12 @@ async def purge_demo(hours: int, dry_run: bool = False) -> tuple[int, int, int]:
             breached += sum(1 for r in records if r["breach"])
             convs = select(Conversation.id).where(Conversation.customer_id.in_(cids))
             orders = select(Order.id).where(Order.customer_id.in_(cids))
+            tickets = select(AfterSalesTicket.id).where(AfterSalesTicket.customer_id.in_(cids))
+            for model in (TicketApproval, TicketEvent, TicketRequest, ExchangeAcceptance):
+                await session.execute(delete(model).where(model.ticket_id.in_(tickets)))
+            await session.execute(delete(AfterSalesTicket).where(AfterSalesTicket.customer_id.in_(cids)))
+            await session.execute(delete(ConversationSummaryRecord).where(
+                ConversationSummaryRecord.conversation_id.in_(convs)))
             await session.execute(delete(ReasoningEvent).where(ReasoningEvent.conversation_id.in_(convs)))
             await session.execute(delete(Message).where(Message.conversation_id.in_(convs)))
             await session.execute(delete(Refund).where(Refund.order_id.in_(orders)))

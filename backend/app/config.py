@@ -150,6 +150,10 @@ class Settings(BaseSettings):
 
     # 请求、模型用量与运行边界。
     agent_v2_enabled: bool = False
+    context_max_chars: int = Field(default=14000, gt=0)
+    context_evidence_max_chars: int = Field(default=1200, gt=0, le=4000)
+    summary_timeout_s: float = Field(default=8, gt=0, le=30)
+    summary_max_chars: int = Field(default=1600, gt=0, le=4000)
     workflow_timeout_s: float = Field(default=30, gt=0, le=60)
     workflow_pool_size: int = Field(default=4, ge=1, le=16)
     max_message_chars: int = 2000

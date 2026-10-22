@@ -12,7 +12,14 @@ from pydantic import ValidationError
 
 from app.after_sales.schemas import EvidenceRef, ExchangeInput
 from app.after_sales.service import TicketError, TicketService
-from app.agent.context import assemble, current_text, grounded_id, identifiers
+from app.agent.context import (
+    ContextBudgetExceeded,
+    assemble,
+    context_data,
+    current_text,
+    grounded_id,
+    identifiers,
+)
 from app.agent.contracts import ExchangeProposal, IntentDecision
 from app.agent.prompts import get_system_prompt
 from app.agent.runtime import ModelCalls
@@ -80,11 +87,13 @@ async def retrieve_knowledge(query, *, model_code=None, category=None):
 
 
 async def structured(caller, schema, messages, config, node):
-    prompt = SystemMessage(
-        "只返回一个符合以下 JSON Schema 的 JSON 对象，不要 Markdown，不要额外字段：\n"
+    messages = list(messages)
+    messages[0] = SystemMessage(
+        str(messages[0].content)
+        + "\n只返回一个符合以下 JSON Schema 的 JSON 对象，不要 Markdown，不要额外字段：\n"
         + json.dumps(schema.model_json_schema(), ensure_ascii=False)
     )
-    raw = await caller.call([prompt, *messages], config, node=node, json_mode=True)
+    raw = await caller.call(messages, config, node=node, json_mode=True)
     # There is no unbounded repair loop. Bad output goes to a safe clarification.
     return schema.model_validate_json(message_text(raw)), raw
 
@@ -121,6 +130,8 @@ def compile_chat_graph(model, fallback=None):
                 "intent_router",
             )
             return {"intent": decision.model_dump(), "router_messages": [raw]}
+        except ContextBudgetExceeded:
+            raise
         except Exception:
             # Keep infrastructure details out of the customer response.
             return {
@@ -213,6 +224,9 @@ def compile_chat_graph(model, fallback=None):
                 evidence = await retrieve_knowledge(
                     query, model_code=scope.get("model_code"), category=scope.get("category")
                 )
+                evidence = evidence.model_copy(deep=True)
+                for source in evidence.sources:
+                    source.excerpt = source.excerpt[:get_settings().context_evidence_max_chars]
             return evidence.model_dump_json()
 
         specialist = compile_specialist(
@@ -264,6 +278,8 @@ def compile_chat_graph(model, fallback=None):
                 "proposal",
             )
             return {"proposal": value.model_dump(), "proposal_messages": [raw]}
+        except ContextBudgetExceeded:
+            raise
         except Exception:
             return {
                 "safe_response": "暂时未能整理出可靠的换货申请，请补充具体问题和希望更换的商品或尺码。"
@@ -346,6 +362,12 @@ def compile_chat_graph(model, fallback=None):
             service = TicketService()
             if ticket_id:
                 ticket = await service.detail(principal, ticket_id)
+                return {"safe_response": ticket_reply(ticket.model_dump())}
+            related = context_data(state["messages"]).get("facts", {}).get("related_tickets", [])
+            if len(related) > 1:
+                return {"safe_response": "您有多张相关工单，请提供这次要查询的唯一工单号。"}
+            if len(related) == 1:
+                ticket = await service.detail(principal, related[0]["id"])
                 return {"safe_response": ticket_reply(ticket.model_dump())}
             tickets = await service.list_tickets(principal, limit=5)
             return {

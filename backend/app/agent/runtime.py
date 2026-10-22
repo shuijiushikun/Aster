@@ -16,6 +16,9 @@ async def invoke_model(model, messages, config: RunnableConfig, *, node: str):
     # Runnable and receive callbacks/config so tracing also covers specialist calls.
     from langchain_core.runnables import Runnable
 
+    from app.agent.context import fit_messages
+
+    messages = fit_messages(messages)
     runtime = config.get("configurable", {}).get("turn_runtime")
     message = None
     try:
@@ -66,6 +69,10 @@ class ModelCalls:
             try:
                 return await invoke_model(bound(self.model), messages, config, node=node)
             except Exception as exc:
+                from app.agent.context import ContextBudgetExceeded
+
+                if isinstance(exc, ContextBudgetExceeded):
+                    raise
                 if self.fallback is None:
                     raise
                 breaker.trip(exc)

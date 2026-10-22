@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import { X } from "lucide-react";
-import { useEffect, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type RefObject } from "react";
 import type { Tone } from "../../lib/outcome";
 
 type Variant = "primary" | "secondary" | "ghost";
@@ -14,7 +14,7 @@ export function Button({
   return (
     <button
       className={clsx(
-        "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex items-center justify-center gap-2 rounded-full font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
         {
           sm: "h-8 px-3 text-xs",
           md: "h-9 px-4 text-sm",
@@ -115,29 +115,62 @@ export function LiveDot({ className }: { className?: string }) {
   );
 }
 
-/** 小屏幕上用于展示侧边内容的滑出面板。 */
-export function Drawer({
-  open,
-  onClose,
-  title,
-  children,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  children: ReactNode;
-}) {
+function useModalFocus(open: boolean, panelRef: RefObject<HTMLElement>, onClose: () => void) {
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const previous = document.activeElement as HTMLElement | null;
+    const focusable = () => Array.from(panelRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex="0"]') ?? []).filter((element) => element.getClientRects().length > 0);
+    focusable()[0]?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeRef.current();
+      if (e.key !== "Tab") return;
+      const items = focusable();
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+    return () => { window.removeEventListener("keydown", onKey); if (previous?.getClientRects().length) previous.focus(); };
+  }, [open, panelRef]);
+}
+
+/** 侧栏始终挂载，小屏仅切换可见性，保留工单中的未确认请求。 */
+export function ResponsivePanel({ open, onClose, title, children, className }: {
+  open: boolean; onClose: () => void; title: string; children: ReactNode; className?: string;
+}) {
+  const [wide, setWide] = useState(() => window.matchMedia("(min-width: 1280px)").matches);
+  const panelRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 1280px)");
+    const update = () => setWide(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  const modal = open && !wide;
+  useModalFocus(modal, panelRef, onClose);
+  return <>
+    {modal && <div aria-hidden="true" className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={onClose} />}
+    <aside ref={panelRef} className={clsx(className, modal && "is-open")} role={modal ? "dialog" : undefined} aria-modal={modal || undefined} aria-hidden={!wide && !open} aria-label={title}>
+      <div className="service-panel-mobile-header"><span className="text-sm font-semibold">{title}</span><IconButton label="关闭" onClick={onClose}><X size={16} /></IconButton></div>
+      {children}
+    </aside>
+  </>;
+}
+
+/** 按需挂载的普通抽屉，用于不持有请求状态的订单列表。 */
+export function Drawer({ open, onClose, title, children }: {
+  open: boolean; onClose: () => void; title: string; children: ReactNode;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  useModalFocus(open, panelRef, onClose);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="absolute inset-y-0 right-0 flex w-[min(26rem,92vw)] animate-slide-in flex-col border-l border-line bg-surface shadow-2xl">
+    <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label={title}>
+      <div aria-hidden="true" className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div ref={panelRef} className="absolute inset-y-0 right-0 flex w-[min(26rem,92vw)] animate-slide-in flex-col border-l border-line bg-surface shadow-2xl">
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
           <span className="text-sm font-semibold">{title}</span>
           <IconButton label="关闭" onClick={onClose}>

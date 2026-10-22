@@ -6,9 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app import redis as shared
 from app.auth import ROLE_ADMIN, mint_token
-from app.db import seed
 from app.db import session as db
 from app.db.models import Base
+from tests.seed_data import load_refund_fixture
 
 # Opt-in: run the suite against real Postgres/Redis (CI sets these).
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", "")
@@ -33,7 +33,7 @@ async def engine(tmp_path):
     previous = db.engine
     db.configure(eng)
     async with db.SessionLocal() as s:
-        seed._load(s)
+        load_refund_fixture(s)
         await s.commit()
     yield eng
     db.configure(previous)

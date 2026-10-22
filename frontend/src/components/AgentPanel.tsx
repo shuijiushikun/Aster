@@ -41,8 +41,9 @@ export default function AgentPanel({
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [steps.length]);
 
-  const tokens = steps
-    .filter((s) => s.step_type === "usage")
+  const usage = steps.filter((s) => s.step_type === "usage");
+  const unknownUsage = usage.some((s) => s.payload.status === "unknown" || s.payload.input_tokens == null || s.payload.output_tokens == null);
+  const tokens = usage
     .reduce((n, s) => n + (s.payload.input_tokens ?? 0) + (s.payload.output_tokens ?? 0), 0);
   const tools = steps.filter((s) => s.step_type === "tool_call").length;
   const elapsed = startedAt ? ((streaming ? now : endedAt ?? now) - startedAt) / 1000 : 0;
@@ -69,7 +70,7 @@ export default function AgentPanel({
         </div>
         <div className="grid grid-cols-3 gap-2">
           <Stat label="工具调用" value={tools} />
-          <Stat label="词元用量" value={tokens.toLocaleString("zh-CN")} />
+          <Stat label="词元用量" value={!usage.length ? "未记录" : unknownUsage ? `${tokens.toLocaleString("zh-CN")} + 未知` : tokens.toLocaleString("zh-CN")} />
           <Stat label="耗时" value={`${elapsed.toFixed(1)} 秒`} />
         </div>
       </div>

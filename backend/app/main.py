@@ -84,7 +84,7 @@ async def lifespan(_app: FastAPI):
     await db.dispose()
 
 
-app = FastAPI(title="ACME 智能退款客服", lifespan=lifespan)
+app = FastAPI(title="智能售后工作台", lifespan=lifespan)
 
 # Docker/k8s 中，单页应用通过 nginx/ingress 的 /api 路由同源访问后端。
 # 将客服组件嵌入其他来源的网站时才需要跨域访问，并应明确配置来源白名单。

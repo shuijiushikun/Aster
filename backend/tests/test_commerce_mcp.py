@@ -13,12 +13,12 @@ from app.agent.tools import ToolContext, tool_config
 from app.auth import Principal, mint_token
 from app.commerce_mcp.server import create_app
 from app.config import Settings
-from app.db import seed
 from app.db import session as db
 from app.db.models import AfterSalesTicket, ExchangeAcceptance, Refund
 from app.mcp.auth import mint_service_token
 from app.mcp.client import CommerceClient
 from app.mcp.tools import build_commerce_tools
+from tests.seed_data import seed_exchange_samples
 
 ALICE = Principal("CUST-EX-001", "customer")
 BOB = Principal("CUST-EX-002", "customer")
@@ -37,7 +37,7 @@ def mcp_settings():
 
 @pytest.fixture
 async def mcp_client(engine, mcp_settings):
-    await seed.seed_exchange_samples()
+    await seed_exchange_samples()
     app = create_app(mcp_settings)
 
     def factory(**kwargs):

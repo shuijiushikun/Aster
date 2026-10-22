@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { getToken } from "../auth";
 import {
   ApiError, decideAdminTicket, fetchAdminTicket, fetchAdminTickets, friendlyError, resumeAdminTicket,
 } from "../api";
@@ -14,6 +15,10 @@ type Action =
   | { kind: "resume"; body: { request_id: string } };
 
 export default function AdminTickets() {
+  const mounted = useRef(true);
+  const identity = useRef(getToken("admin"));
+  const alive = () => mounted.current && getToken("admin") === identity.current;
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [status, setStatus] = useState<TicketStatus | "">("");
   const [tickets, setTickets] = useState<TicketSummary[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -50,11 +55,13 @@ export default function AdminTickets() {
   }, [selectedId]);
 
   const refresh = async () => {
+    if (!alive()) return;
     setLoading(true);
     const [list, current] = await Promise.allSettled([
       fetchAdminTickets(status || undefined),
       selectedId ? fetchAdminTicket(selectedId) : Promise.resolve(null),
     ]);
+    if (!alive()) return;
     if (list.status === "fulfilled") {
       setTickets(list.value);
       setListError(null);
@@ -91,9 +98,11 @@ export default function AdminTickets() {
       const result = action.kind === "decision"
         ? await decideAdminTicket(selectedId, action.body)
         : await resumeAdminTicket(selectedId, action.body);
+      if (!alive()) return;
       setAccepted((rows) => ({ ...rows, [selectedId]: result }));
       clearRetry();
     } catch (err) {
+      if (!alive()) return;
       if (err instanceof ApiError && err.status === 409) {
         clearRetry();
         setActionError("操作与当前工单事实冲突，已重新查询最新状态。请核对后继续。");
@@ -106,8 +115,7 @@ export default function AdminTickets() {
         setActionError(friendlyError(err));
       }
     } finally {
-      await refresh();
-      setBusy(false);
+      if (alive()) { await refresh(); setBusy(false); }
     }
   };
 

@@ -1,4 +1,4 @@
-import { ArrowRight, Eye, KeyRound, Scale, ShieldAlert } from "lucide-react";
+import { ArrowRight, BookOpen, Eye, KeyRound, Scale } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { friendlyError } from "../api";
@@ -19,9 +19,9 @@ const FEATURES = [
     text: "模型提出请求，代码决定结果。规则校验与数据库约束共同防止违规退款和重复退款。",
   },
   {
-    icon: ShieldAlert,
-    title: "识别可疑指令注入",
-    text: "可疑指令会被标记，退款处理仍遵循既定业务规则。",
+    icon: BookOpen,
+    title: "知识引用有据可查",
+    text: "根据实际商品检索知识文档，并展示返回的来源与片段。",
   },
   {
     icon: Eye,
@@ -57,14 +57,14 @@ export default function Welcome() {
             <span className="h-1.5 w-1.5 rounded-full bg-ok" /> 在线演示 · 无需注册
           </span>
           <h1 className="mt-5 text-3xl font-bold tracking-tight sm:text-4xl">
-            一个严格遵守退款规则的{" "}
+            有依据、有进度的{" "}
             <span className="text-brand">
-              智能客服助手。
+              智能售后服务。
             </span>
           </h1>
           <p className="mt-4 max-w-xl text-base text-muted">
-            您将获得独立的演示账户和五笔订单，覆盖不同的退款规则。
-            可以申请退款、尝试边界场景，并实时查看处理过程。
+            创建独立演示账户，查询订单、咨询商品问题或提出售后需求。
+            对话回复、工单状态与处理过程，在同一工作台清晰呈现。
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Button variant="primary" size="lg" onClick={start} disabled={starting}>

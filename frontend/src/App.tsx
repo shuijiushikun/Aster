@@ -58,9 +58,9 @@ export default function App() {
   if (error || !meta) return <Offline />;
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="app-shell">
       <Header />
-      <main className="min-h-0 flex-1">
+      <main className="app-content">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route

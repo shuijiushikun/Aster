@@ -136,7 +136,7 @@ function StepBody({ step }: { step: StepEvent }) {
     case "usage":
       return (
         <p className="font-mono text-[11px] text-subtle">
-          输入 {p.input_tokens} · 输出 {p.output_tokens}
+          {p.status === "unknown" ? "本次调用用量未知" : <>输入 {p.input_tokens ?? "未知"} · 输出 {p.output_tokens ?? "未知"}</>}
           {p.model ? ` · ${p.model}` : ""}
         </p>
       );

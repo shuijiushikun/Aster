@@ -78,6 +78,12 @@ function ago(iso: string): string {
 }
 
 export default function Admin() {
+  const [token, setToken] = useState(getToken("admin"));
+  useEffect(() => onTokenChange(() => setToken(getToken("admin"))), []);
+  return <AdminWorkspace key={token ?? "signed-out"} />;
+}
+
+function AdminWorkspace() {
   const { meta } = useMeta();
   const [conversations, setConversations] = useState<ConversationSummary[] | null>(null);
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -87,7 +93,7 @@ export default function Admin() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [adminToken, setAdminToken] = useState(getToken("admin"));
-  const [view, setView] = useState<"conversations" | "tickets">("conversations");
+  const [view, setView] = useState<"conversations" | "tickets">("tickets");
   const hasToken = Boolean(adminToken);
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -115,18 +121,19 @@ export default function Admin() {
       active = false;
       clearInterval(t);
     };
-  }, [hasToken]);
+  }, [adminToken, hasToken]);
 
   useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedId || !adminToken) return;
     let active = true;
     setLive(false);
     setDetail(null);
     fetchConversation(selectedId)
       .then((d) => active && setDetail(d))
-      .catch((err) => setError(friendlyError(err)));
+      .catch((err) => { if (active) setError(friendlyError(err)); });
 
     const handle = (event: AgentEvent) => {
+      if (!active || getToken("admin") !== adminToken) return;
       setLive(true);
       if (event.kind === "step") {
         setDetail((d) =>
@@ -156,7 +163,7 @@ export default function Admin() {
       active = false;
       close();
     };
-  }, [selectedId]);
+  }, [selectedId, adminToken]);
 
   useEffect(() => {
     timelineRef.current?.scrollTo({ top: timelineRef.current.scrollHeight, behavior: "smooth" });
@@ -185,16 +192,16 @@ export default function Admin() {
   const scoped = meta?.auth_mode === "demo";
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="m-3 flex h-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-3xl border border-line bg-surface/75 shadow-sm sm:m-5 sm:h-[calc(100%-2.5rem)]">
       <div className="border-b border-line px-4 py-4 sm:px-5">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
           <div>
-            <h1 className="text-base font-semibold">管理控制台</h1>
+            <h1 className="text-lg font-semibold">售后管理工作台</h1>
             <p className="text-[10px] text-subtle">时间按北京时间显示</p>
             <p className="text-xs text-subtle">
               {scoped
                 ? "查看对话记录与执行过程；当前身份只能访问自己的演示数据。"
-                : "查看所有会话的对话记录、执行过程与退款结果。"}
+                : "核对售后工单、审批申请，并查看对话与实际执行记录。"}
             </p>
           </div>
         </div>

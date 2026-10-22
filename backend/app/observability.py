@@ -110,8 +110,20 @@ def configure_sentry() -> None:
     if not settings.sentry_dsn:
         return
     import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.httpx import HttpxIntegration
+    from sentry_sdk.integrations.redis import RedisIntegration
+    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+    from sentry_sdk.integrations.starlette import StarletteIntegration
 
-    sentry_sdk.init(dsn=settings.sentry_dsn, environment=settings.env, traces_sample_rate=0.05)
+    # The shared Python environment contains unrelated ML frameworks. Automatic
+    # integration discovery imports them during startup; enable our stack only.
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn, environment=settings.env, traces_sample_rate=0.05,
+        auto_enabling_integrations=False,
+        integrations=[FastApiIntegration(), StarletteIntegration(), HttpxIntegration(),
+                      RedisIntegration(), SqlalchemyIntegration()],
+    )
 
 
 def log_event(logger: logging.Logger, msg: str, level: int = logging.INFO, **fields) -> None:

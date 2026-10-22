@@ -2,7 +2,7 @@ from sqlalchemy import func, select
 
 from app.db import session as db
 from app.db.models import Order, Product
-from app.db.seed import seed_exchange_samples
+from tests.seed_data import seed_exchange_samples
 
 
 async def test_exchange_samples_are_additive_and_repeatable(engine):

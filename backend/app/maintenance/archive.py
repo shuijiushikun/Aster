@@ -24,12 +24,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.prompts import _SYSTEM_TEMPLATE
 from app.db.fixtures import scenario_for
 from app.db.models import (
+    AfterSalesTicket,
     Conversation,
     ConversationArchive,
+    ConversationSummaryRecord,
+    Customer,
+    ExchangeAcceptance,
     Message,
     Order,
     ReasoningEvent,
     Refund,
+    TicketApproval,
     utcnow,
 )
 from app.observability import log_event
@@ -195,6 +200,13 @@ async def snapshot(session: AsyncSession, conv: Conversation) -> dict:
         ).all()
     )
     flags, breaches = check(conv, orders, refunds, messages, events, approvals)
+    ticket_rows = (await session.execute(
+        select(AfterSalesTicket, TicketApproval, ExchangeAcceptance)
+        .outerjoin(TicketApproval, TicketApproval.ticket_id == AfterSalesTicket.id)
+        .outerjoin(ExchangeAcceptance, ExchangeAcceptance.ticket_id == AfterSalesTicket.id)
+        .where(AfterSalesTicket.customer_id == conv.customer_id)
+    )).all()
+    summary = await session.get(ConversationSummaryRecord, conv.id)
 
     return {
         "conversation_id": conv.id,
@@ -219,6 +231,20 @@ async def snapshot(session: AsyncSession, conv: Conversation) -> dict:
             e.payload.get("trace_id") for e in events if e.step_type == "trace" and e.payload
         ],
         "transcript": {
+            "summary": {
+                "text": summary.summary_text, "covered_message_id": summary.covered_message_id,
+            } if summary else None,
+            "tickets": [
+                {
+                    "id": ticket.id, "order_id": ticket.order_id, "status": ticket.status,
+                    "description": ticket.description, "reason_type": ticket.reason_type,
+                    "requested_change": ticket.requested_change, "evidence_refs": ticket.evidence_refs,
+                    "approval": {"decision": approval.decision, "comment": approval.comment,
+                                 "admin_subject": approval.admin_subject} if approval else None,
+                    "reference_code": acceptance.reference_code if acceptance else None,
+                }
+                for ticket, approval, acceptance in ticket_rows
+            ],
             "orders": [
                 {
                     "id": o.id,
@@ -257,9 +283,23 @@ async def archive(session: AsyncSession, customer_ids: list[str]) -> list[dict]:
             select(Conversation).where(Conversation.customer_id.in_(customer_ids))
         )
     ).all()
+    # A normal chat purge may already have detached the ticket's origin. Keep a
+    # distinct zero-turn sandbox snapshot before deleting those business facts.
+    owners_with_conversations = {conv.customer_id for conv in convs}
+    orphan_owners = (await session.scalars(
+        select(Customer).join(AfterSalesTicket, AfterSalesTicket.customer_id == Customer.id)
+        .where(Customer.id.in_(customer_ids), ~Customer.id.in_(owners_with_conversations))
+        .distinct()
+    )).all()
+    convs = list(convs) + [Conversation(
+        id="demo-snapshot:" + customer.id, customer_id=customer.id,
+        created_at=customer.created_at, tokens_used=0,
+    ) for customer in orphan_owners]
     records = []
     for conv in convs:
         record = await snapshot(session, conv)
+        if conv.id.startswith("demo-snapshot:"):
+            record["transcript"]["snapshot_kind"] = "sandbox_without_conversation"
         await session.merge(ConversationArchive(**record, archived_at=utcnow()))
         records.append(record)
         if record["breach"]:
