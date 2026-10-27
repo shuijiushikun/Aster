@@ -21,10 +21,16 @@ export const formatDate = (value: string) =>
 export const TOOL_LABELS: Record<string, string> = {
   get_my_profile: "查询客户资料",
   list_orders: "查询订单列表",
+  list_my_orders: "查询订单列表",
   get_order: "查询订单详情",
   check_refund_eligibility: "校验退款资格",
   issue_refund: "执行退款",
   escalate_to_human: "转交人工审核",
+  get_product: "查询商品信息",
+  get_exchange_policy_facts: "查询换货条件",
+  search_knowledge: "检索售后资料",
+  create_exchange_request: "提交换货申请",
+  get_tickets: "查询售后工单",
 };
 
 export const toolLabel = (name: string) => TOOL_LABELS[name] ?? "调用工具";

@@ -16,9 +16,9 @@ export function Button({
       className={clsx(
         "inline-flex items-center justify-center gap-2 rounded-full font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
         {
-          sm: "h-8 px-3 text-xs",
-          md: "h-9 px-4 text-sm",
-          lg: "h-11 px-6 text-sm",
+          sm: "min-h-10 px-3.5 py-2 text-sm",
+          md: "min-h-11 px-4 py-2 text-sm",
+          lg: "min-h-12 px-6 py-3 text-base",
         }[size],
         {
           primary: "bg-brand-solid font-semibold text-on-brand shadow-sm shadow-brand/20 hover:bg-brand-solid/90",
@@ -42,7 +42,7 @@ export function IconButton({
       aria-label={label}
       title={label}
       className={clsx(
-        "inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-fg",
+        "inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-fg",
         className,
       )}
       {...props}
@@ -71,7 +71,7 @@ export function Badge({
   return (
     <span
       className={clsx(
-        "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold",
         TONES[tone],
         className,
       )}
@@ -140,10 +140,10 @@ function useModalFocus(open: boolean, panelRef: RefObject<HTMLElement>, onClose:
 export function ResponsivePanel({ open, onClose, title, children, className }: {
   open: boolean; onClose: () => void; title: string; children: ReactNode; className?: string;
 }) {
-  const [wide, setWide] = useState(() => window.matchMedia("(min-width: 1280px)").matches);
+  const [wide, setWide] = useState(() => window.matchMedia("(min-width: 1024px)").matches);
   const panelRef = useRef<HTMLElement>(null);
   useEffect(() => {
-    const query = window.matchMedia("(min-width: 1280px)");
+    const query = window.matchMedia("(min-width: 1024px)");
     const update = () => setWide(query.matches);
     update();
     query.addEventListener("change", update);

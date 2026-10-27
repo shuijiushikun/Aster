@@ -8,7 +8,7 @@ import { Badge, LiveDot } from "./ui";
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-lg bg-surface-2 px-2.5 py-2">
-      <div className="text-[10px] font-medium uppercase tracking-wide text-subtle">{label}</div>
+      <div className="text-xs font-medium text-subtle">{label}</div>
       <div className="mt-0.5 font-mono text-sm font-semibold tabular-nums">{value}</div>
     </div>
   );
@@ -29,7 +29,7 @@ export default function AgentPanel({
   showTitle?: boolean;
 }) {
   const [now, setNow] = useState(Date.now());
-  const endRef = useRef<HTMLDivElement>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!streaming) return;
@@ -38,7 +38,8 @@ export default function AgentPanel({
   }, [streaming]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const el = timelineRef.current;
+    el?.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [steps.length]);
 
   const usage = steps.filter((s) => s.step_type === "usage");
@@ -50,7 +51,7 @@ export default function AgentPanel({
   const outcome = outcomeOf(steps);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="space-y-3 border-b border-line p-4">
         <div className="flex items-center justify-between">
           {showTitle ? (
@@ -58,10 +59,10 @@ export default function AgentPanel({
               <Activity size={16} className="text-brand" /> 智能体执行过程
             </div>
           ) : (
-            <span className="text-xs text-subtle">最近一轮</span>
+            <span className="text-sm text-subtle">最近一轮</span>
           )}
           {streaming ? (
-            <span className="flex items-center gap-1.5 text-[11px] font-semibold text-bad">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-bad">
               <LiveDot /> 实时
             </span>
           ) : outcome ? (
@@ -70,22 +71,21 @@ export default function AgentPanel({
         </div>
         <div className="grid grid-cols-3 gap-2">
           <Stat label="工具调用" value={tools} />
-          <Stat label="词元用量" value={!usage.length ? "未记录" : unknownUsage ? `${tokens.toLocaleString("zh-CN")} + 未知` : tokens.toLocaleString("zh-CN")} />
+          <Stat label="token 用量" value={!usage.length ? "未记录" : unknownUsage ? `${tokens.toLocaleString("zh-CN")} + 未知` : tokens.toLocaleString("zh-CN")} />
           <Stat label="耗时" value={`${elapsed.toFixed(1)} 秒`} />
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div ref={timelineRef} className="min-h-0 flex-1 overflow-y-auto p-4">
         {steps.length === 0 && !streaming ? (
           <div className="px-2 py-10 text-center">
             <p className="text-sm font-medium">暂无执行记录</p>
-            <p className="mt-1 text-xs text-subtle">
+            <p className="mt-1 text-sm text-subtle">
               发送消息后，这里会实时展示工具调用、规则校验和处理结果。
             </p>
           </div>
         ) : (
           <ReasoningTimeline steps={steps} hideUsage />
         )}
-        <div ref={endRef} />
       </div>
     </div>
   );

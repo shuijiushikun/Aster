@@ -5,16 +5,28 @@ import logging
 
 import httpx
 from llama_index.core import VectorStoreIndex
-from llama_index.core.schema import MetadataMode, QueryBundle
+from llama_index.core.schema import MetadataMode, NodeWithScore, QueryBundle
+from llama_index.core.vector_stores.types import VectorStoreQueryResult
 from qdrant_client import models
 
 from app.config import get_settings
 from app.rag.corpus import GENERAL_MODEL, OWNER
 from app.rag.embedding import make_embedding
 from app.rag.schemas import Evidence, RetrievalResult
+from app.rag.sparse import reciprocal_rank_fusion
 from app.rag.store import condition, read_manifest
 
 logger = logging.getLogger(__name__)
+
+
+def fuse_candidates(dense, sparse, top_k):
+    def branch(items):
+        return VectorStoreQueryResult(nodes=[n.node for n in items],
+            similarities=[float(n.score or 0) for n in items], ids=[n.node.node_id for n in items])
+
+    fused = reciprocal_rank_fusion(branch(dense), branch(sparse), top_k=top_k)
+    return [NodeWithScore(node=node, score=score)
+            for node, score in zip(fused.nodes, fused.similarities, strict=True)]
 
 
 def scope_filter(manifest: dict, model_code: str | None, category: str | None) -> models.Filter:
@@ -51,9 +63,16 @@ class KnowledgeRetriever:
             raise ValueError("invalid rerank indices")
         return [(candidates[r["index"]], float(r["relevance_score"])) for r in rows]
 
+    async def recall(self, bundle, filters, mode):
+        s = self.settings
+        return await self.index.as_retriever(
+            similarity_top_k=s.rag_candidate_k, sparse_top_k=s.rag_candidate_k,
+            vector_store_query_mode=mode, vector_store_kwargs={"qdrant_filters": filters},
+        ).aretrieve(bundle)
+
     async def retrieve(self, query: str, *, model_code: str | None = None, category: str | None = None,
                        mode: str | None = None, rerank: bool | None = None,
-                       query_embedding: list[float] | None = None) -> RetrievalResult:
+                       query_embedding: list[float] | None = None, overview: bool = False) -> RetrievalResult:
         """无可信型号时只检索通用文档；未知或品类不符的型号直接要求核实。"""
         s = self.settings
         mode = mode or s.rag_search_mode
@@ -73,22 +92,23 @@ class KnowledgeRetriever:
                     return RetrievalResult(**base, status="insufficient_evidence", reason="unverified_model_scope")
                 filters = scope_filter(manifest, model_code, category)
                 bundle = QueryBundle(query_str=query, embedding=query_embedding)
-                # 同一 query bundle 复用 Embedding；拒答只用校准过的 dense 分数，不比较 RRF/Rerank 分数。
-                dense = self.index.as_retriever(
-                    similarity_top_k=s.rag_candidate_k, vector_store_query_mode="default",
-                    vector_store_kwargs={"qdrant_filters": filters},
-                )
-                candidates = await dense.aretrieve(bundle)
-                if not candidates or (candidates[0].score or 0) < s.rag_min_dense_score:
-                    return RetrievalResult(**base, status="insufficient_evidence", reason="no_relevant_evidence")
-                score_kind, warnings = "cosine", []
+                # 两路独立召回、独立校准；不能先按 dense 拒答，否则 BM25 无法补召回。
+                dense = await self.recall(bundle, filters, "default")
+                dense_ok = bool(dense) and (dense[0].score or 0) >= s.rag_min_dense_score
+                candidates = dense
+                accepted = dense_ok
+                score_kind, warnings = "cosine", ["knowledge_overview"] if overview else []
                 if mode == "hybrid":
-                    candidates = await self.index.as_retriever(
-                        similarity_top_k=s.rag_candidate_k, sparse_top_k=s.rag_candidate_k,
-                        hybrid_top_k=s.rag_candidate_k, vector_store_query_mode="hybrid",
-                        vector_store_kwargs={"qdrant_filters": filters},
-                    ).aretrieve(bundle)
+                    sparse = await self.recall(bundle, filters, "sparse")
+                    threshold = s.rag_min_bm25_score
+                    sparse_ok = bool(sparse) and threshold > 0 and (sparse[0].score or 0) >= threshold
+                    accepted = dense_ok or sparse_ok
+                    if not dense_ok and sparse_ok and not overview:
+                        warnings.append("bm25_recall_fallback")
+                    candidates = fuse_candidates(dense, sparse, s.rag_candidate_k)
                     score_kind = "rrf"
+                if not candidates or (not overview and not accepted):
+                    return RetrievalResult(**base, status="insufficient_evidence", reason="no_relevant_evidence")
                 ranked = [(n, float(n.score or 0)) for n in candidates]
                 if rerank and candidates:
                     try:

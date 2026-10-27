@@ -60,7 +60,7 @@ function Kpi({
         <Icon size={17} />
       </span>
       <div className="min-w-0">
-        <div className="truncate text-[11px] font-medium text-subtle">{label}</div>
+        <div className="truncate text-xs font-medium text-subtle">{label}</div>
         <div className="text-lg font-semibold tabular-nums leading-tight">
           {value === undefined ? <Skeleton className="mt-1 h-4 w-10" /> : value}
         </div>
@@ -197,8 +197,8 @@ function AdminWorkspace() {
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
           <div>
             <h1 className="text-lg font-semibold">售后管理工作台</h1>
-            <p className="text-[10px] text-subtle">时间按北京时间显示</p>
-            <p className="text-xs text-subtle">
+            <p className="text-xs text-subtle">时间按北京时间显示</p>
+            <p className="text-sm text-subtle">
               {scoped
                 ? "查看对话记录与执行过程；当前身份只能访问自己的演示数据。"
                 : "核对售后工单、审批申请，并查看对话与实际执行记录。"}
@@ -210,12 +210,12 @@ function AdminWorkspace() {
           <Kpi icon={CheckCircle2} label="已批准" value={stats ? d.approved ?? 0 : undefined} tone="ok" />
           <Kpi icon={XCircle} label="已拒绝" value={stats ? d.denied ?? 0 : undefined} tone="bad" />
           <Kpi icon={UserRoundCog} label="转人工" value={stats ? d.escalated ?? 0 : undefined} tone="warn" />
-          <Kpi icon={Coins} label="模型词元用量" value={stats?.tokens_used.toLocaleString("zh-CN")} tone="info" />
+          <Kpi icon={Coins} label="模型token 用量" value={stats?.tokens_used.toLocaleString("zh-CN")} tone="info" />
         </div>
         <nav className="mt-3 flex gap-2" aria-label="管理台视图">
           {([ ["conversations", "会话记录"], ["tickets", "工单审批"] ] as const).map(([key, label]) => (
             <button key={key} onClick={() => setView(key)} aria-pressed={view === key}
-              className={clsx("rounded-lg px-3 py-1.5 text-xs font-medium", view === key ? "bg-surface-2 text-fg" : "text-muted hover:bg-surface-2")}>
+              className={clsx("rounded-lg px-3 py-1.5 text-sm font-medium", view === key ? "bg-surface-2 text-fg" : "text-muted hover:bg-surface-2")}>
               {label}
             </button>
           ))}
@@ -245,7 +245,7 @@ function AdminWorkspace() {
             </label>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {error && <p className="p-4 text-xs text-bad">{error}</p>}
+            {error && <p className="p-4 text-sm text-bad">{error}</p>}
             {conversations === null && !error && (
               <div className="space-y-2 p-3">
                 {[0, 1, 2].map((i) => (
@@ -280,10 +280,10 @@ function AdminWorkspace() {
                   <span className="truncate text-sm font-medium">
                     {c.customer_name || "未知客户"}
                   </span>
-                  <span className="shrink-0 text-[11px] text-subtle">{ago(c.created_at)}</span>
+                  <span className="shrink-0 text-xs text-subtle">{ago(c.created_at)}</span>
                 </div>
-                <div className="mt-0.5 truncate text-xs text-muted">{plainText(c.last_message) || "—"}</div>
-                <div className="mt-1 flex items-center gap-2 text-[10px] text-subtle">
+                <div className="mt-0.5 truncate text-sm text-muted">{plainText(c.last_message) || "—"}</div>
+                <div className="mt-1 flex items-center gap-2 text-xs text-subtle">
                   <span className="font-mono">{c.customer_id}</span>·<span>{c.message_count} 条消息</span>
                 </div>
               </button>
@@ -308,7 +308,7 @@ function AdminWorkspace() {
                 </button>
                 <div>
                   <div className="text-sm font-semibold">对话记录</div>
-                  <div className="text-xs text-subtle">
+                  <div className="text-sm text-subtle">
                     {detail?.customer_name ?? "…"} ·{" "}
                     <span className="font-mono">{detail?.customer_id}</span>
                   </div>
@@ -344,7 +344,7 @@ function AdminWorkspace() {
                     <LiveDot /> 实时
                   </Badge>
                 ) : (
-                  <span className="text-[11px] text-subtle">{detail?.events.length ?? 0} 个步骤</span>
+                  <span className="text-xs text-subtle">{detail?.events.length ?? 0} 个步骤</span>
                 )}
               </div>
               <div ref={timelineRef} className="min-h-0 flex-1 overflow-y-auto p-4">

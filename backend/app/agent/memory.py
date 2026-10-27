@@ -6,6 +6,7 @@ import logging
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from sqlalchemy import func, select, update
 
+from app.after_sales.references import resolve_order_reference
 from app.agent.context import build_context, identifiers
 from app.agent.streaming import message_text
 from app.config import get_settings
@@ -67,6 +68,18 @@ async def load_context(customer_id: str, cid: str, *, current_message_id: int | 
                else AIMessage(row.content, id=f"db:{row.id}") for row in reversed(history)]
         raw.append(HumanMessage(current.content, id=f"db:{current.id}"))
         ticket_ids, order_ids = identifiers(raw, "TKT"), identifiers(raw, "ORD")
+        resolved_order_id = await resolve_order_reference(session, customer_id, current.content)
+        previous_user = next((row for row in history if row.role == "user"), None)
+        previous_order_id = (await resolve_order_reference(session, customer_id, previous_user.content)
+                             if previous_user else None)
+        if resolved_order_id:
+            order_ids = {resolved_order_id}
+        elif not order_ids and previous_order_id:
+            order_ids = {previous_order_id}
+        catalog = list(await session.scalars(select(Product).where(Product.is_active.is_(True))
+                                             .order_by(Product.id).limit(20)))
+        catalog_products = [{"model_code": p.model_code, "name": p.name, "category": p.category}
+                            for p in catalog]
         query = (
             select(AfterSalesTicket, Order, Product, TicketApproval, ExchangeAcceptance)
             .join(Order, Order.id == AfterSalesTicket.order_id)
@@ -127,7 +140,9 @@ async def load_context(customer_id: str, cid: str, *, current_message_id: int | 
                               "covered_message_id": pointer})
     return build_context(raw, system_prompt or get_system_prompt(),
                          facts={"owner_customer_id": customer_id, "related_tickets": tickets,
-                                "related_orders": related_orders},
+                                "related_orders": related_orders, "resolved_order_id": resolved_order_id,
+                                "previous_order_id": previous_order_id,
+                                "catalog_products": catalog_products},
                          summaries=summaries)
 
 

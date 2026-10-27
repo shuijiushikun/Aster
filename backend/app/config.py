@@ -79,6 +79,12 @@ class Settings(BaseSettings):
     fake_llm_latency_ms: int = 1500
     fake_llm_error_rate: float = 0.0
 
+    # 本地小模型只分类；服务故障或关闭时回退原保守正则。
+    intent_classifier_enabled: bool = True
+    intent_classifier_url: str = "http://127.0.0.1:11434"
+    intent_classifier_model: str = "qwen2.5:3b"
+    intent_classifier_timeout_s: float = Field(default=15, gt=0, le=30)
+
     # 数据存储：将普通 postgresql:// / sqlite:/// URL 转换为异步驱动形式。
     database_url: str = f"sqlite:///{BACKEND_ROOT / 'var' / 'app.db'}"
     db_pool_size: int = 10
@@ -91,10 +97,10 @@ class Settings(BaseSettings):
     # Redis：开发或测试环境留空时使用进程内 fakeredis，仅支持单进程。
     redis_url: str = ""
 
-    # 独立的本地只读商城 MCP。服务身份与前端 JWT 使用不同的密钥和 audience。
+    # 独立售后 MCP，含知识检索与受规则约束的写操作。
     commerce_mcp_url: str = "http://127.0.0.1:8001/mcp"
     commerce_mcp_service_secret: str = ""
-    commerce_mcp_timeout_s: float = Field(default=5.0, gt=0, le=30)
+    commerce_mcp_timeout_s: float = Field(default=30.0, gt=0, le=30)
     commerce_mcp_max_retries: int = Field(default=1, ge=0, le=2)
 
     # 售后知识检索：Embedding 显式使用百炼，集合与其他项目隔离。
@@ -104,7 +110,7 @@ class Settings(BaseSettings):
     embed_dimension: int = Field(default=1024, gt=0)
     qdrant_url: str = ""
     qdrant_api_key: str = ""
-    qdrant_collection: str = "after_sales_knowledge_v1"
+    qdrant_collection: str = "after_sales_knowledge_bm25_v1"
     rag_timeout_s: float = Field(default=20, gt=0, le=60)
     rag_search_mode: str = "hybrid"
     rag_rerank_enabled: bool = True
@@ -112,6 +118,8 @@ class Settings(BaseSettings):
     rag_candidate_k: int = Field(default=12, ge=4, le=30)
     # 未校准时不按分数拒答；实际演示值由独立校准样本确定。
     rag_min_dense_score: float = Field(default=0.0, ge=0, le=1)
+    # 正数表示已校准的 BM25 准入分数；0 时 BM25 仅参与排序，不单独触发准入。
+    rag_min_bm25_score: float = Field(default=0.0, ge=0, allow_inf_nan=False)
     rerank_model: str = "qwen3-rerank"
     rerank_api_key: str = ""  # 空值时复用百炼 Embedding Key。
     rerank_url: str = "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank"
@@ -149,7 +157,8 @@ class Settings(BaseSettings):
     escalation_threshold: float = 500.0
 
     # 请求、模型用量与运行边界。
-    agent_v2_enabled: bool = False
+    agent_v2_enabled: bool = True
+    agent_max_tool_calls: int = Field(default=8, ge=1, le=20)
     context_max_chars: int = Field(default=14000, gt=0)
     context_evidence_max_chars: int = Field(default=1200, gt=0, le=4000)
     summary_timeout_s: float = Field(default=8, gt=0, le=30)
@@ -160,7 +169,7 @@ class Settings(BaseSettings):
     max_conversation_turns: int = 30
     max_conversation_tokens: int = 60000
     customer_daily_token_budget: int = 300_000
-    agent_recursion_limit: int = 12
+    agent_recursion_limit: int = 24
     max_output_tokens: int = 1024
     chat_rate_limit: str = "10/minute"
     # 背压控制：限制所有 Pod 正在处理的智能体对话轮数。
@@ -182,7 +191,7 @@ class Settings(BaseSettings):
     opik_url_override: str = ""
     opik_api_key: str = ""
     opik_workspace: str = ""
-    opik_project_name: str = "refund-agent"
+    opik_project_name: str = "aster"
 
     @model_validator(mode="after")
     def _check_prod(self) -> "Settings":

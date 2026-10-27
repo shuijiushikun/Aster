@@ -1,26 +1,20 @@
-"""T4 routing contracts and business effects, without running the full suite."""
-
+"""统一 Agent 的真实 MCP 工具链、上下文、事件和用量回归。"""
 from uuid import uuid4
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, ToolMessage
 from sqlalchemy import func, select
 
 from app import redis as shared
 from app.agent import chat_graph, graph
-from app.agent.contracts import ExchangeProposal, IntentDecision
 from app.agent.runner import run_agent_turn
-from app.agent.runtime import ModelCalls, TurnRuntime
-from app.agent.specialists import compile_specialist
 from app.agent.streaming import GraphEvents
-from app.auth import Principal
+from app.commerce_mcp import operations
 from app.config import get_settings
 from app.db import session as db
-from app.db.models import AfterSalesTicket, Conversation, Message, Refund, utcnow
-from app.mcp.schemas import OrderInfo, OrderPage, ProductInfo, ReadResult, failure
-from app.mcp.tools import build_commerce_tools
+from app.db.models import AfterSalesTicket, Conversation, KnowledgeDocument, Message, Refund
+from app.mcp.tools import build_after_sales_tools
 from app.rag.schemas import Evidence, RetrievalResult
-from tests.seed_data import seed_exchange_samples
 
 
 def ai(content="", *, call=None, usage=True):
@@ -49,31 +43,6 @@ class Model:
         return result
 
 
-def intent(kind, *, order=None, needs_order=False, ticket=None):
-    return ai(
-        IntentDecision(
-            intent=kind,
-            order_id=order,
-            needs_order=needs_order,
-            needs_knowledge=kind in ("knowledge", "exchange"),
-            related_ticket_id=ticket,
-        ).model_dump_json()
-    )
-
-
-def proposal(**updates):
-    fields = dict(
-        order_id="ORD-EX-1001",
-        reason_type="defect",
-        description="耳机左耳无声，希望更换同型号",
-        requested_change="更换同型号耳机",
-        evidence_document_ids=["KB-HP-01"],
-        missing_information=[],
-        recommended_action="request_review",
-    )
-    return ai(ExchangeProposal(**(fields | updates)).model_dump_json())
-
-
 def evidence(model_code="HP-01"):
     return RetrievalResult(
         query="左耳无声怎么办",
@@ -97,62 +66,20 @@ def evidence(model_code="HP-01"):
     )
 
 
-class Commerce:
-    def __init__(self):
-        self.calls = []
-
-    async def call(self, principal: Principal, name, args):
-        self.calls.append((principal, name, args))
-        if name == "get_product":
-            return ReadResult[ProductInfo](
-                ok=True,
-                data=ProductInfo(
-                    product_id="PROD-HP-01",
-                    model_code="HP-01",
-                    name="耳机",
-                    category="digital",
-                    is_active=True,
-                ),
-            )
-        if (
-            name == "get_order"
-            and args["order_id"] == "ORD-EX-1001"
-            and principal.sub == "CUST-EX-001"
-        ):
-            return ReadResult[OrderInfo](
-                ok=True,
-                data=OrderInfo(
-                    order_id=args["order_id"],
-                    product_id="PROD-HP-01",
-                    model_code="HP-01",
-                    product_name="耳机",
-                    category="digital",
-                    amount="99",
-                    status="delivered",
-                    order_date=utcnow(),
-                    delivered_date=utcnow(),
-                    is_final_sale=False,
-                    already_refunded=False,
-                ),
-            )
-        if name == "list_my_orders":
-            return ReadResult[OrderPage](ok=True, data=OrderPage(orders=[]))
-        return failure("NOT_FOUND", "未找到订单")
-
-
 @pytest.fixture
-async def setup_chat(engine, monkeypatch):
-    await seed_exchange_samples()
+async def setup_chat(mcp_client, monkeypatch):
+    client, _, _ = mcp_client
     monkeypatch.setattr(get_settings(), "agent_v2_enabled", True)
-    commerce = Commerce()
-    monkeypatch.setattr(chat_graph, "build_commerce_tools", lambda: build_commerce_tools(commerce))
+    monkeypatch.setattr(chat_graph, "build_after_sales_tools", lambda: build_after_sales_tools(client))
+    monkeypatch.setattr(graph, "get_fallback_model", lambda: None)
+    async with db.SessionLocal() as session, session.begin():
+        session.add(KnowledgeDocument(id="KB-HP-01", title="耳机说明", category="digital",
+            model_code="HP-01", revision="1", status="active", source_path="demo.md", content_hash="test"))
 
     async def retrieve(query, **scope):
         return evidence(scope.get("model_code"))
-
-    monkeypatch.setattr(chat_graph, "retrieve_knowledge", retrieve)
-    monkeypatch.setattr(graph, "get_fallback_model", lambda: None)
-    return commerce
+    monkeypatch.setattr(operations, "retrieve_knowledge", retrieve)
+    return client
 
 
 def use_model(monkeypatch, *replies):
@@ -174,237 +101,221 @@ async def count_tickets():
         return await session.scalar(select(func.count()).select_from(AfterSalesTicket))
 
 
-async def test_exchange_open_citations_subgraph_events_and_usage(setup_chat, monkeypatch):
-    model = use_model(
-        monkeypatch,
-        intent("exchange", order="ORD-EX-1001", needs_order=True),
-        ai(call=("get_order", {"order_id": "ORD-EX-1001"})),
-        ai("订单已核实"),
-        ai(call=("search_knowledge", {"query": "HP-01 左耳无声怎么换货"})),
-        proposal(),
-    )
+def exchange_calls():
+    return [ai(call=("get_order", {"order_id": "ORD-EX-1001"})),
+            ai(call=("search_knowledge", {"query": "左耳无声换货", "order_id": "ORD-EX-1001"})),
+            ai(call=("create_exchange_request", {"order_id": "ORD-EX-1001", "reason_type": "defect",
+                "description": "左耳无声，希望更换同型号", "requested_change": "同型号"})),
+            ai("换货已受理。")]
+
+
+async def test_exchange_citations_events_and_usage(setup_chat, monkeypatch):
+    model = use_model(monkeypatch, *exchange_calls())
     events = await turn("ORD-EX-1001 耳机左耳无声，我要换同型号")
-    assert "本轮仅记录申请" in final(events)
-    ticket_event = next(e for e in events if e["kind"] == "ticket_update")
-    assert ticket_event["status"] == "OPEN"
-    assert any(
-        e["kind"] == "knowledge_sources" and e["sources"][0]["revision"] == "1" for e in events
-    )
+    assert "待工作流处理" in final(events) and "受理已完成" not in final(events)
+    ticket = next(e for e in events if e["kind"] == "ticket_update")
+    assert ticket["status"] == "OPEN"
+    assert any(e["kind"] == "knowledge_sources" and e["sources"][0]["revision"] == "1" for e in events)
     steps = [e for e in events if e["kind"] == "step"]
-    assert len([e for e in steps if e["step_type"] == "tool_result"]) == 2
-    assert any("/tools" in e["node"] for e in steps if e["step_type"] == "tool_result")
-    usages = [e for e in steps if e["step_type"] == "usage"]
-    assert len(usages) == model.calls == 5  # no parent/subgraph double charge
+    assert len([e for e in steps if e["step_type"] == "usage"]) == model.calls == 4
     cid = events[0]["conversation_id"]
     async with db.SessionLocal() as session:
-        ticket = await session.get(AfterSalesTicket, ticket_event["ticket_id"])
-        assert ticket.evidence_refs[0]["chunk_index"] == 2
-        assert (await session.get(Conversation, cid)).tokens_used == 60
-        messages = list(
-            await session.scalars(select(Message).where(Message.conversation_id == cid))
-        )
+        row = await session.get(AfterSalesTicket, ticket["ticket_id"])
+        assert row.evidence_refs[0]["chunk_index"] == 2
+        assert (await session.get(Conversation, cid)).tokens_used == 48
+        messages = list(await session.scalars(select(Message).where(Message.conversation_id == cid)))
         assert len(messages) == 2 and not messages[-1].content.startswith("{")
-    assert await shared.customer_tokens_today("CUST-EX-001") == 60
+    assert await shared.customer_tokens_today("CUST-EX-001") == 48
 
 
-@pytest.mark.parametrize("kind", ["knowledge", "order", "ticket_followup"])
-async def test_read_intents_never_build_ticket(setup_chat, monkeypatch, kind):
-    replies = [intent(kind)]
-    if kind == "knowledge":
-        replies += [
-            ai(call=("search_knowledge", {"query": "换货申请政策"})),
-            ai("请参阅 KB-HP-01，申请需人工审批。"),
-        ]
-    elif kind == "order":
-        replies += [ai(call=("list_my_orders", {})), ai("没有近期订单"), ai("没有查询到近期订单。")]
-    use_model(monkeypatch, *replies)
-    events = await turn("查询售后信息")
-    assert final(events) and await count_tickets() == 0
+@pytest.mark.parametrize("name,args,text", [
+    ("search_knowledge", {"query": "换货政策"}, "换货政策是什么"),
+    ("list_my_orders", {}, "查询订单"),
+    ("get_tickets", {}, "查询售后工单"),
+])
+async def test_read_requests_never_build_ticket(setup_chat, monkeypatch, name, args, text):
+    use_model(monkeypatch, ai(call=(name, args)), ai("请参阅返回的资料。"))
+    assert final(await turn(text)) and await count_tickets() == 0
 
 
 @pytest.mark.parametrize("text", ["耳机坏了，我要换货", "ORD-EX-1001 和 ORD-EX-1002 都换货"])
-async def test_missing_or_ambiguous_order_requests_clarification(setup_chat, monkeypatch, text):
-    use_model(monkeypatch, intent("exchange", order="ORD-EX-1001", needs_order=True))
+async def test_missing_or_ambiguous_order_blocks_model_guessed_order(setup_chat, monkeypatch, text):
+    use_model(monkeypatch, ai(call=("get_order", {"order_id": "ORD-EX-1001"})), ai("请提供唯一订单号。"))
     events = await turn(text)
-    assert "唯一订单号" in final(events)
-    assert setup_chat.calls == [] and await count_tickets() == 0
+    results = [e["payload"] for e in events if e.get("step_type") == "tool_result"]
+    assert results[0]["result"]["error"]["code"] == "INVALID_ARGUMENT"
+    assert await count_tickets() == 0
 
 
-async def test_router_parse_failure_is_safe_and_usage_is_kept(setup_chat, monkeypatch):
-    use_model(monkeypatch, ai('{"intent":"exchange","approved":true}'))
+async def test_unknown_tool_is_safe_and_usage_kept(setup_chat, monkeypatch):
+    use_model(monkeypatch, ai(call=("approve_exchange", {})), ai("请在工作台等待审批。"))
     events = await turn("申请换货")
-    assert "暂时无法准确理解" in final(events)
-    assert len([e for e in events if e.get("step_type") == "usage"]) == 1
+    assert len([e for e in events if e.get("step_type") == "usage"]) == 2
     assert await count_tickets() == 0
 
 
-@pytest.mark.parametrize("bad", ["order", "citation"])
-async def test_proposal_cannot_change_verified_order_or_invent_citations(
-    setup_chat, monkeypatch, bad
-):
-    use_model(
-        monkeypatch,
-        intent("exchange", order="ORD-EX-1001", needs_order=True),
-        ai(call=("get_order", {"order_id": "ORD-EX-1001"})),
-        ai("已查到"),
-        ai(call=("search_knowledge", {"query": "左耳无声换货"})),
-        proposal(
-            **(
-                {"order_id": "ORD-EX-1002"}
-                if bad == "order"
-                else {"evidence_document_ids": ["FAKE-DOC"]}
-            )
-        ),
-    )
-    assert "尚未提交" in final(await turn("ORD-EX-1001 左耳无声换同型号"))
-    assert await count_tickets() == 0
-
-
-async def test_order_ownership_failure_does_not_retrieve_or_write(setup_chat, monkeypatch):
-    use_model(
-        monkeypatch,
-        intent("exchange", order="ORD-EX-1001", needs_order=True),
-        ai(call=("get_order", {"order_id": "ORD-EX-1001"})),
-        ai("查不到"),
-    )
-    assert "未能核实" in final(await turn("ORD-EX-1001 换货", customer="CUST-EX-002"))
-    assert await count_tickets() == 0
-
-
-async def test_product_scope_comes_from_mcp_not_model(setup_chat, monkeypatch):
-    scopes = []
-
-    async def retrieve(query, **scope):
-        scopes.append(scope)
-        return evidence()
-
-    monkeypatch.setattr(chat_graph, "retrieve_knowledge", retrieve)
-    use_model(
-        monkeypatch,
-        intent("knowledge", needs_order=True),
-        ai(call=("get_product", {"model_code": "HP-01"})),
-        ai("型号已核实"),
-        ai(call=("search_knowledge", {"query": "HP-01 左耳无声"})),
-        ai("先重置耳机，参考 KB-HP-01。"),
-    )
-    await turn("HP-01 左耳无声怎么办")
-    assert scopes == [{"model_code": "HP-01", "category": "digital"}]
-    assert await count_tickets() == 0
-
-
-async def test_unverified_explicit_scope_never_falls_back_to_generic_knowledge(
-    setup_chat, monkeypatch
-):
-    async def no_retrieve(*args, **kwargs):
-        raise AssertionError("unverified product must not retrieve")
-
-    monkeypatch.setattr(chat_graph, "retrieve_knowledge", no_retrieve)
-    # Router forgot needs_order; the backend still recognises the explicit ID.
-    use_model(
-        monkeypatch,
-        intent("knowledge", order="ORD-EX-2001"),
-        ai(call=("get_order", {"order_id": "ORD-EX-2001"})),
-        ai("未找到"),
-    )
-    assert "核实型号" in final(await turn("ORD-EX-2001 耳机怎么排查"))
-    assert await count_tickets() == 0
-
-
-async def test_insufficient_knowledge_never_creates_ticket(setup_chat, monkeypatch):
-    async def retrieve(query, **kwargs):
-        return RetrievalResult(
-            query=query,
-            model_code="HP-01",
-            status="insufficient_evidence",
-            reason="no_relevant_evidence",
-        )
-
-    monkeypatch.setattr(chat_graph, "retrieve_knowledge", retrieve)
-    use_model(
-        monkeypatch,
-        intent("exchange", order="ORD-EX-1001", needs_order=True),
-        ai(call=("get_order", {"order_id": "ORD-EX-1001"})),
-        ai("已核实"),
-        ai(call=("search_knowledge", {"query": "换货"})),
-    )
+@pytest.mark.parametrize("bad", ["order", "missing_evidence", "forged_evidence"])
+async def test_model_cannot_change_order_or_forge_evidence(setup_chat, monkeypatch, bad):
+    args = {"order_id": "ORD-EX-1002" if bad == "order" else "ORD-EX-1001", "description": "故障换货"}
+    if bad == "forged_evidence":
+        args["evidence_token"] = "forged"
+    use_model(monkeypatch, ai(call=("create_exchange_request", args)), ai("尚未提交申请。"))
     assert "尚未提交" in final(await turn("ORD-EX-1001 我要换货"))
     assert await count_tickets() == 0
 
 
-async def test_unknown_usage_is_explicit_and_failed_later_calls_keep_prior_usage(
-    setup_chat, monkeypatch
-):
-    use_model(
-        monkeypatch,
-        intent("knowledge"),
-        ai(call=("search_knowledge", {"query": "售后政策"}), usage=False),
-        RuntimeError("provider failed"),
-    )
+async def test_ownership_failure_does_not_retrieve_or_write(setup_chat, monkeypatch):
+    async def no_retrieve(*args, **kwargs):
+        raise AssertionError("wrong owner must not retrieve")
+    monkeypatch.setattr(operations, "retrieve_knowledge", no_retrieve)
+    use_model(monkeypatch, ai(call=("search_knowledge", {"query": "故障", "order_id": "ORD-EX-1001"})),
+              ai("未能核实订单。"))
+    assert "未能核实" in final(await turn("ORD-EX-1001 换货", customer="CUST-EX-002"))
+    assert await count_tickets() == 0
+
+
+async def test_scope_from_server_catalog_and_citations_in_reply(setup_chat, monkeypatch):
+    scopes = []
+    async def retrieve(query, **scope):
+        scopes.append(scope)
+        return evidence()
+    monkeypatch.setattr(operations, "retrieve_knowledge", retrieve)
+    use_model(monkeypatch, ai(call=("search_knowledge", {"query": "左耳无声", "model_code": "HP-01"})),
+              ai("可先重置耳机。"))
+    assert "耳机说明" in final(await turn("HP-01 左耳无声怎么办"))
+    assert scopes == [{"model_code": "HP-01", "category": "digital"}]
+    assert await count_tickets() == 0
+
+
+async def test_explicit_scope_cannot_be_omitted_for_generic_search(setup_chat, monkeypatch):
+    async def no_retrieve(*args, **kwargs):
+        raise AssertionError("must not retrieve without verifying explicit scope")
+    monkeypatch.setattr(operations, "retrieve_knowledge", no_retrieve)
+    use_model(monkeypatch, ai(call=("search_knowledge", {"query": "排查故障"})), ai("请核实型号。"))
+    assert "核实型号" in final(await turn("ORD-EX-2001 耳机怎么排查"))
+    assert await count_tickets() == 0
+
+
+async def test_insufficient_evidence_blocks_application(setup_chat, monkeypatch):
+    async def retrieve(query, **kwargs):
+        return RetrievalResult(query=query, model_code="HP-01", status="insufficient_evidence", reason="none")
+    monkeypatch.setattr(operations, "retrieve_knowledge", retrieve)
+    use_model(monkeypatch, *exchange_calls())
+    assert "有效资料" in final(await turn("ORD-EX-1001 我要换货"))
+    assert await count_tickets() == 0
+
+
+async def test_unknown_usage_and_provider_failure_keep_prior_usage(setup_chat, monkeypatch):
+    use_model(monkeypatch, ai(call=("search_knowledge", {"query": "售后政策"})),
+              ai(call=("list_my_orders", {}), usage=False), RuntimeError("provider failed"))
     events = await turn("换货政策是什么")
     usage = [e["payload"] for e in events if e.get("step_type") == "usage"]
     assert [u["status"] for u in usage] == ["reported", "unknown", "unknown"]
-    assert usage[1]["input_tokens"] is None
-    assert events[-1]["kind"] == "error"
+    assert usage[1]["input_tokens"] is None and events[-1]["kind"] == "error"
     assert await shared.customer_tokens_today("CUST-EX-001") == 12
 
 
-async def test_v2_refund_adapter_preserves_real_tool_result_and_accounting(setup_chat, monkeypatch):
-    use_model(
-        monkeypatch,
-        intent("refund", order="ORD-1001", needs_order=True),
-        ai(call=("issue_refund", {"order_id": "ORD-1001", "reason": "客户申请退款"})),
-        ai("退款已批准。"),
-    )
+async def test_refund_uses_mcp_and_preserves_guard_and_accounting(setup_chat, monkeypatch):
+    use_model(monkeypatch, ai(call=("issue_refund", {"order_id": "ORD-1001"})), ai("模拟退款已批准。"))
     events = await turn("ORD-1001 帮我退款", customer="CUST-001")
     assert "退款已批准" in final(events)
     assert not any(e.get("step_type") == "output_correction" for e in events)
-    assert len([e for e in events if e.get("step_type") == "usage"]) == 3
+    assert len([e for e in events if e.get("step_type") == "usage"]) == 2
     async with db.SessionLocal() as session:
-        assert (
-            await session.scalar(
-                select(func.count())
-                .select_from(Refund)
-                .where(Refund.order_id == "ORD-1001", Refund.decision == "approved")
-            )
-            == 1
-        )
+        assert await session.scalar(select(func.count()).select_from(Refund).where(
+            Refund.order_id == "ORD-1001", Refund.decision == "approved")) == 1
 
 
-async def test_order_tool_budget_is_three_even_for_looping_model():
-    from langchain_core.tools import tool
-
-    executed = []
-
-    @tool
-    async def read_order() -> str:
-        """Read only."""
-        executed.append(True)
-        return "ok"
-
-    model = Model(*(ai(call=("read_order", {})) for _ in range(4)))
-    result = await compile_specialist(ModelCalls(model), [read_order], "order_agent").ainvoke(
-        {"messages": [HumanMessage("订单")], "calls": 0},
-        config={"configurable": {"turn_runtime": TurnRuntime()}},
-    )
-    assert result["calls"] == len(executed) == model.calls == 3
+@pytest.mark.parametrize("text", ["ORD-1001 能退款吗", "ORD-1001 不要退款，只查询订单"])
+async def test_consultation_rejects_model_write(setup_chat, monkeypatch, text):
+    use_model(monkeypatch, ai(call=("issue_refund", {"order_id": "ORD-1001"})), ai("尚未办理退款。"))
+    await turn(text, customer="CUST-001")
+    async with db.SessionLocal() as session:
+        assert await session.scalar(select(func.count()).select_from(Refund)) == 0
 
 
-def test_parent_subgraph_events_are_deduplicated_and_json_never_final():
-    adapter = GraphEvents(v2=True)
-    message = ai('{"intent":"order"}')
-    message.id = "one"
-    assert len(list(adapter.adapt((("order_agent:123",), {"agent": {"messages": [message]}})))) == 1
-    assert list(adapter.adapt(((), {"order_agent": {"order_messages": [message]}}))) == []
-    tool_msg = ToolMessage("ok", tool_call_id="call", name="get_order", id="two")
-    assert (
-        next(adapter.adapt((("order_agent:123",), {"tools": {"messages": [tool_msg]}})))[0]
-        == "message"
-    )
+async def test_single_agent_tool_budget_stops_loop(setup_chat, monkeypatch):
+    monkeypatch.setattr(get_settings(), "agent_max_tool_calls", 3)
+    model = use_model(monkeypatch, *(ai(call=("list_my_orders", {})) for _ in range(4)))
+    events = await turn("查询订单")
+    assert model.calls == 3
+    assert len([e for e in events if e.get("step_type") == "tool_result"]) == 3
+    assert final(events)
 
 
-def test_query_reply_cannot_claim_exchange_success_or_trust_status_without_receipt():
-    assert chat_graph.claims_exchange_success("换货已受理，请等待后续通知。")
+async def test_query_reply_cannot_claim_exchange_success(setup_chat, monkeypatch):
+    use_model(monkeypatch, ai("换货已受理。"))
+    assert "尚未取得" in final(await turn("查一下换货政策"))
     assert chat_graph.claims_exchange_success("Your exchange has been approved.")
     assert not chat_graph.claims_exchange_success("换货尚未受理，审批后才能处理。")
     text = chat_graph.ticket_reply({"id": "TKT-1", "order_id": "ORD-1", "status": "COMPLETED"})
     assert "凭证尚待核实" in text and "受理已完成" not in text
+
+
+async def test_short_order_followup_reaches_verified_order(setup_chat, monkeypatch):
+    use_model(monkeypatch, ai(call=("get_order", {"order_id": "ORD-1001"})), ai("已查到这笔订单。"))
+    events = await turn("1001的订单情况", customer="CUST-001")
+    results = [e["payload"]["result"] for e in events if e.get("step_type") == "tool_result"]
+    assert results[0]["ok"] and results[0]["data"]["order_id"] == "ORD-1001"
+
+
+async def test_general_product_knowledge_uses_catalog_without_order_selection(setup_chat, monkeypatch):
+    use_model(monkeypatch, ai(call=("search_knowledge", {"query": "耳机单侧无声怎么排查", "model_code": "HP-01"})),
+              ai("可以先检查连接，再尝试排查。"))
+    events = await turn("随便看看耳机相关知识")
+    assert "耳机说明" in final(events)
+    assert any(e["kind"] == "knowledge_sources" and e["sources"] for e in events)
+
+
+async def test_knowledge_outage_is_explained_separately_from_missing_specification(setup_chat, monkeypatch):
+    async def unavailable(query, **kwargs):
+        return RetrievalResult(query=query, model_code="HP-01", status="unavailable", reason="service_unavailable")
+    monkeypatch.setattr(operations, "retrieve_knowledge", unavailable)
+    use_model(monkeypatch, ai(call=("search_knowledge", {"query": "续航", "model_code": "HP-01"})), ai("可能没有资料。"))
+    text = final(await turn("HP-01 续航多久"))
+    assert "没有连通" in text and "不用反复输入" in text
+
+
+async def test_missing_evidence_keeps_relevant_clarification_instead_of_fixed_headphone_reply(setup_chat, monkeypatch):
+    async def missing(query, **kwargs):
+        return RetrievalResult(query=query, model_code="TSHIRT-01", status="insufficient_evidence")
+    monkeypatch.setattr(operations, "retrieve_knowledge", missing)
+    answer = "这次没有检索到能核实烘干要求的资料。您可以提供衣服洗标上的说明，我再帮您对照已有洗护资料。"
+    use_model(monkeypatch, ai(call=("search_knowledge", {"query": "烘干", "model_code": "TSHIRT-01"})), ai(answer))
+    text = final(await turn("TSHIRT-01 能烘干吗"))
+    assert text == answer and "耳机" not in text
+
+
+def test_ticket_reply_explains_next_step_and_preserves_acceptance_reference():
+    pending = chat_graph.ticket_reply({"id": "TKT-1", "order_id": "ORD-1", "status": "WAITING_INFO"})
+    assert "补充具体问题" in pending and "模拟换货受理已完成" not in pending
+    completed = chat_graph.ticket_reply({"id": "TKT-1", "order_id": "ORD-1", "status": "COMPLETED", "reference_code": "EXC-123"})
+    assert "EXC-123" in completed and "不安排实际发货" in completed
+
+
+@pytest.mark.parametrize("text", [
+    "等待补充和审批不会让已按时提交的申请过期。",
+    "只有到这一步，才能告知您换货已受理。",
+    "换货在**受理成功之前**（包括待审批期间），仍可按规则申请退款。",
+])
+def test_exchange_process_explanations_are_not_personal_success_claims(text):
+    assert not chat_graph.claims_exchange_success(text)
+
+
+@pytest.mark.parametrize("text", [
+    "换货已受理，之后请查看记录。",
+    "您无需再次提交，已为您完成换货。",
+    "只有审批后才能受理。不过现在工单已完成。",
+])
+def test_exchange_success_claim_is_still_checked_beside_process_explanation(text):
+    assert chat_graph.claims_exchange_success(text)
+
+
+def test_events_deduplicated_and_intermediate_messages_never_final():
+    adapter = GraphEvents(v2=True)
+    message = ai("准备查询订单")
+    message.id = "one"
+    assert len(list(adapter.adapt(((), {"agent": {"messages": [message]}})))) == 1
+    assert list(adapter.adapt(((), {"agent": {"messages": [message]}}))) == []
+    tool_msg = ToolMessage("ok", tool_call_id="call", name="get_order", id="two")
+    assert next(adapter.adapt(((), {"tools": {"messages": [tool_msg]}})))[0] == "message"

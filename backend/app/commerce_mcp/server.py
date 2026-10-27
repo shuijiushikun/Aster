@@ -1,4 +1,4 @@
-"""单个只读商城 MCP：python -m uvicorn app.commerce_mcp.server:create_app --factory --port 8001。"""
+"""售后 MCP：python -m uvicorn app.commerce_mcp.server:create_app --factory --port 8001。"""
 
 import logging
 from contextlib import asynccontextmanager
@@ -87,7 +87,7 @@ def create_app(settings: Settings | None = None) -> Starlette:
         stateless_http=True,
         json_response=True,
         streamable_http_path="/mcp",
-        instructions="仅提供经身份和归属验证的商城只读事实，不能批准或执行售后操作。",
+        instructions="提供本人订单、退款、知识检索和换货申请；审批和受理由独立业务工作流执行。",
     )
 
     @server.tool(annotations=READ_ONLY)
@@ -179,6 +179,9 @@ def create_app(settings: Settings | None = None) -> Starlette:
         except SQLAlchemyError as error:
             return unavailable(ReadResult[ExchangeFacts], error)
 
+    from app.commerce_mcp.operations import register_business_tools
+
+    register_business_tools(server, settings)
     app = server.streamable_http_app()
     app.add_middleware(ServiceContextMiddleware, secret=secret)
     transport_lifespan = app.router.lifespan_context

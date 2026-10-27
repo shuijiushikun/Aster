@@ -17,6 +17,7 @@ class MessageOut(BaseModel):
 
 class ReasoningEventOut(BaseModel):
     id: int
+    message_id: int | None = None
     seq: int
     step_type: str
     node: str

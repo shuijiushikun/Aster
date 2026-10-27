@@ -18,6 +18,31 @@ from tests.test_resilience import FakeModel, _tool_call
 KEYS = [*BRANCHES, OTHER_KEY]
 
 
+def test_eval_environment_isolates_legacy_refund_suite(monkeypatch, tmp_path):
+    from evals.run import _prepare_env
+
+    monkeypatch.setenv("AGENT_V2_ENABLED", "true")
+    monkeypatch.setenv("INTENT_CLASSIFIER_ENABLED", "true")
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///not-the-eval-database.db")
+    monkeypatch.setenv("REDIS_URL", "redis://not-the-test-instance:6379/0")
+    monkeypatch.setenv("SEED_ON_STARTUP", "true")
+    monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+    monkeypatch.setenv("FAKE_LLM_LATENCY_MS", "100")
+    monkeypatch.setenv("FAKE_LLM_ERROR_RATE", "1")
+    monkeypatch.setenv("LLM_FALLBACK_PROVIDER", "openai")
+    monkeypatch.setenv("LOG_LEVEL", "WARNING")
+    monkeypatch.setenv("OPIK_TRACK_DISABLE", "true")
+    _prepare_env("scripted", str(tmp_path))
+
+    import os
+
+    assert os.environ["DATABASE_URL"] == f"sqlite:///{tmp_path}/evals.db"
+    assert os.environ["REDIS_URL"] == ""
+    assert os.environ["AGENT_V2_ENABLED"] == "false"
+    assert os.environ["INTENT_CLASSIFIER_ENABLED"] == "false"
+    assert os.environ["LLM_PROVIDER"] == "fake"
+
+
 def test_case_files_are_valid():
     cases = load_cases()
     assert cases

@@ -1,4 +1,4 @@
-"""轻量词法稀疏召回：中文二元片段 + 英文/型号完整词，非学习型 BM25。"""
+"""BM25：中文二元片段与完整英文/型号词，Qdrant 在查询时计算 IDF。"""
 
 import math
 import re
@@ -7,22 +7,47 @@ from hashlib import blake2s
 
 from llama_index.core.vector_stores.types import VectorStoreQueryResult
 
-SPARSE_VERSION = "zh-bigram-latin-logtf-v1"
+SPARSE_VERSION = "zh-bigram-latin-bm25-v1"
+BM25_K1 = 1.2
+BM25_B = 0.75
 
 
-def sparse_vectors(texts: list[str]) -> tuple[list[list[int]], list[list[float]]]:
-    batch_indices, batch_values = [], []
-    for text in texts:
-        tokens = re.findall(r"[a-z0-9]+(?:[-_][a-z0-9]+)*", text.lower())
-        for run in re.findall(r"[\u4e00-\u9fff]+", text):
-            tokens.extend(run[i:i+2] for i in range(max(1, len(run)-1)))
-        counts = Counter(int.from_bytes(blake2s(t.encode(), digest_size=4).digest(), "big") for t in tokens)
-        indices = sorted(counts)
-        values = [1 + math.log(counts[i]) for i in indices]
-        norm = math.sqrt(sum(v*v for v in values)) or 1
-        batch_indices.append(indices)
-        batch_values.append([v / norm for v in values])
-    return batch_indices, batch_values
+def token_counts(text: str) -> Counter[int]:
+    tokens = re.findall(r"[a-z0-9]+(?:[-_][a-z0-9]+)*", text.lower())
+    for run in re.findall(r"[\u4e00-\u9fff]+", text):
+        tokens.extend(run[i:i+2] for i in range(max(1, len(run)-1)))
+    return Counter(int.from_bytes(blake2s(t.encode(), digest_size=4).digest(), "big") for t in tokens)
+
+
+def average_document_length(texts: list[str]) -> float:
+    if not texts:
+        raise ValueError("BM25 requires a nonempty corpus")
+    return max(1.0, sum(sum(token_counts(text).values()) for text in texts) / len(texts))
+
+
+class BM25Encoder:
+    def __init__(self, average_length: float | None = None):
+        if average_length is not None and (not math.isfinite(average_length) or average_length <= 0):
+            raise ValueError("average_length must be finite and positive")
+        self.average_length = average_length
+
+    def documents(self, texts: list[str]) -> tuple[list[list[int]], list[list[float]]]:
+        if self.average_length is None:
+            raise ValueError("average_length must be computed over the whole corpus before indexing")
+        batch_indices, batch_values = [], []
+        for text in texts:
+            counts = token_counts(text)
+            length = sum(counts.values())
+            normalization = BM25_K1 * (1 - BM25_B + BM25_B * length / self.average_length)
+            indices = sorted(counts)
+            batch_indices.append(indices)
+            batch_values.append([counts[i] * (BM25_K1 + 1) / (counts[i] + normalization) for i in indices])
+        return batch_indices, batch_values
+
+    def queries(self, texts: list[str]) -> tuple[list[list[int]], list[list[float]]]:
+        # 查询只标记不同词项；IDF 由集合的 Modifier.IDF 计算，避免重复加权。
+        indices = [sorted(token_counts(text)) for text in texts]
+        return indices, [[1.0] * len(row) for row in indices]
 
 
 def reciprocal_rank_fusion(dense: VectorStoreQueryResult, sparse: VectorStoreQueryResult,

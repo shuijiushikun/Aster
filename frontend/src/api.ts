@@ -138,6 +138,14 @@ export async function fetchConversations(): Promise<ConversationSummary[]> {
   return (await request("admin", "/api/conversations?limit=100")).json();
 }
 
+export async function fetchMyConversations(signal?: AbortSignal): Promise<ConversationSummary[]> {
+  return (await request("customer", "/api/me/conversations?limit=100", { signal })).json();
+}
+
+export async function fetchMyConversation(id: string, signal?: AbortSignal): Promise<ConversationDetail> {
+  return (await request("customer", `/api/me/conversations/${encodeURIComponent(id)}`, { signal })).json();
+}
+
 export async function fetchConversation(id: string): Promise<ConversationDetail> {
   return (await request("admin", `/api/conversations/${encodeURIComponent(id)}`)).json();
 }

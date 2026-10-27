@@ -53,7 +53,7 @@ export default function Welcome() {
     <div className="flex h-full overflow-y-auto">
       <div className="relative m-auto flex max-w-5xl flex-col gap-10 px-5 py-12 lg:flex-row lg:items-center">
         <div className="relative flex-1 animate-fade-up">
-          <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-muted">
+          <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-sm font-medium text-muted">
             <span className="h-1.5 w-1.5 rounded-full bg-ok" /> 在线演示 · 无需注册
           </span>
           <h1 className="mt-5 text-3xl font-bold tracking-tight sm:text-4xl">
@@ -72,7 +72,7 @@ export default function Welcome() {
               {starting ? "正在创建演示环境…" : "开始体验"}
               {!starting && <ArrowRight size={16} />}
             </Button>
-            <span className="max-w-xs text-xs text-subtle">
+            <span className="max-w-xs text-sm text-subtle">
               演示数据将在 {ttl} 小时后清理，对话保留 {keepDays} 天用于安全分析，
               请勿输入真实个人信息。
             </span>
@@ -87,7 +87,7 @@ export default function Welcome() {
                   <Icon size={18} />
                 </div>
                 <h2 className="text-sm font-semibold">{title}</h2>
-                <p className="mt-1 text-xs leading-relaxed text-muted">{text}</p>
+                <p className="mt-1 text-sm leading-relaxed text-muted">{text}</p>
               </Card>
             </div>
           ))}

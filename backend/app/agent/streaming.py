@@ -1,6 +1,7 @@
 """One adapter for graph/subgraph updates; intermediate JSON is never a reply."""
 
 from langchain_core.messages import AIMessage, ToolMessage
+from langgraph.types import Overwrite
 
 
 def message_text(message) -> str:
@@ -32,7 +33,10 @@ class GraphEvents:
                 "router_messages",
                 "proposal_messages",
             ):
-                for message in update.get(key, []):
+                messages = update.get(key, [])
+                if isinstance(messages, Overwrite):
+                    messages = messages.value
+                for message in messages:
                     if not isinstance(message, (AIMessage, ToolMessage)):
                         continue
                     identity = message.id or (

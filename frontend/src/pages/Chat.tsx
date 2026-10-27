@@ -1,10 +1,11 @@
 import clsx from "clsx";
-import { Activity, ArrowUpRight, Check, ChevronDown, ClipboardList, Copy, MessageCircle, Package, RotateCcw, Send, User } from "lucide-react";
+import { Activity, ArrowUpRight, Check, ClipboardList, Copy, History, MessageCircle, Package, RotateCcw, Send, User } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, fetchOrders, friendlyError, streamChat } from "../api";
+import { ApiError, fetchMyConversation, fetchMyConversations, fetchOrders, friendlyError, streamChat } from "../api";
 import { getToken, onTokenChange } from "../auth";
 import AgentPanel from "../components/AgentPanel";
 import CustomerTickets from "../components/CustomerTickets";
+import ConversationHistory from "../components/ConversationHistory";
 import KnowledgeSources from "../components/KnowledgeSources";
 import Logo from "../components/Logo";
 import Markdown from "../components/Markdown";
@@ -12,11 +13,12 @@ import OrdersPanel, { OrderSummary } from "../components/OrdersPanel";
 import { useToast } from "../components/Toaster";
 import { Badge, Button, Drawer, IconButton, ResponsivePanel } from "../components/ui";
 import { getDemo } from "../lib/demo";
+import { historyKey, restoreHistory } from "../lib/chatHistory";
 import { useMeta } from "../lib/meta";
 import { formatTime, toolLabel } from "../lib/locale";
 import { OUTCOME_META, outcomeOf } from "../lib/outcome";
 import { scenarioCards } from "../lib/scenarios";
-import type { AgentEvent, ChatMessage, DomainEvent, KnowledgeSource, Order, StepEvent } from "../types";
+import type { AgentEvent, ChatMessage, ConversationSummary, KnowledgeSource, Order, StepEvent } from "../types";
 
 const MAX_CHARS = 2000;
 const uid = () => crypto.randomUUID();
@@ -45,7 +47,7 @@ function Bubble({ message: m }: { message: ChatMessage }) {
       <div className={clsx("message-bubble", user ? "user-bubble whitespace-pre-wrap" : "assistant-bubble", m.error && "border border-bad/30 bg-bad/5")}>
         {user ? m.content : <Markdown>{m.content}</Markdown>}
       </div>
-      <div className={clsx("mt-1 flex items-center gap-2 text-[10px] text-subtle", user && "justify-end")}><span>{formatTime(m.at)}</span>{outcome && <Badge tone={outcome.tone}>{outcome.label}</Badge>}{!user && <CopyButton text={m.content} />}</div>
+      <div className={clsx("mt-1 flex items-center gap-2 text-xs text-subtle", user && "justify-end")}><span>{formatTime(m.at)}</span>{outcome && <Badge tone={outcome.tone}>{outcome.label}</Badge>}{!user && <CopyButton text={m.content} />}</div>
     </div>
   </div>;
 }
@@ -63,7 +65,6 @@ function ChatWorkspace({ token }: { token: string | null }) {
   const demo = meta?.auth_mode === "demo" ? getDemo() : null;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [steps, setSteps] = useState<StepEvent[]>([]);
-  const [domains, setDomains] = useState<DomainEvent[]>([]);
   const [sources, setSources] = useState<KnowledgeSource[]>([]);
   const [sourcesReceived, setSourcesReceived] = useState(false);
   const [turnStart, setTurnStart] = useState<number | null>(null);
@@ -78,16 +79,60 @@ function ChatWorkspace({ token }: { token: string | null }) {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [ticketVersion, setTicketVersion] = useState(0);
   const [ticketId, setTicketId] = useState<string | null>(null);
-  const [drawer, setDrawer] = useState<"orders" | "service" | null>(null);
-  const [progressOpen, setProgressOpen] = useState(false);
+  const [drawer, setDrawer] = useState<"orders" | "service" | "history" | null>(null);
+  const [histories, setHistories] = useState<ConversationSummary[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(Boolean(token));
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(Boolean(token));
+  const storageKey = historyKey(token);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const chatController = useRef<AbortController | null>(null);
   const ordersController = useRef<AbortController | null>(null);
   const mounted = useRef(true);
   const sending = useRef(false);
+  const historyController = useRef<AbortController | null>(null);
 
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; chatController.current?.abort(); ordersController.current?.abort(); }; }, []);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; chatController.current?.abort(); ordersController.current?.abort(); historyController.current?.abort(); }; }, []);
+  function remember(id: string) { if (storageKey) { try { sessionStorage.setItem(storageKey, id); } catch { /* 无浏览器存储时仍可手动打开历史。 */ } } }
+  const loadHistory = useCallback(async (signal?: AbortSignal) => {
+    if (!token) return [];
+    setHistoryLoading(true);
+    try {
+      const rows = await fetchMyConversations(signal);
+      if (mounted.current && !signal?.aborted && getToken("customer") === token) { setHistories(rows); setHistoryError(null); }
+      return rows;
+    } catch (err) {
+      if (mounted.current && !signal?.aborted) setHistoryError(friendlyError(err));
+      return [];
+    } finally { if (mounted.current && !signal?.aborted) setHistoryLoading(false); }
+  }, [token]);
+  async function openConversation(id: string, signal?: AbortSignal) {
+    if (sending.current) return;
+    setRestoring(true); setHistoryError(null);
+    try {
+      const detail = await fetchMyConversation(id, signal);
+      if (!mounted.current || signal?.aborted || getToken("customer") !== token) return;
+      const saved = restoreHistory(detail);
+      setMessages(saved.messages); setSteps(saved.steps); setSources(saved.sources); setSourcesReceived(saved.sourcesReceived);
+      setTurnStart(saved.startedAt); setTurnEnd(saved.endedAt); setConversationId(id); setTicketId(null); remember(id); setDrawer(null);
+    } catch (err) { if (mounted.current && !signal?.aborted) { setHistoryError(friendlyError(err)); setDrawer("history"); } }
+    finally { if (mounted.current && !signal?.aborted) setRestoring(false); }
+  }
+  useEffect(() => {
+    if (!token) return;
+    const controller = new AbortController(); historyController.current = controller;
+    void (async () => {
+      const rows = await loadHistory(controller.signal);
+      if (controller.signal.aborted) return;
+      let saved: string | null = null;
+      try { saved = storageKey ? sessionStorage.getItem(storageKey) : null; } catch { /* 直接使用服务端历史。 */ }
+      const id = saved === "" ? null : rows.find((row) => row.id === saved)?.id ?? rows[0]?.id;
+      if (id) await openConversation(id, controller.signal);
+      else setRestoring(false);
+    })();
+    return () => controller.abort();
+  }, [token, loadHistory, storageKey]);
   const loadOrders = useCallback(async () => {
     if (!token) return;
     ordersController.current?.abort();
@@ -103,27 +148,27 @@ function ChatWorkspace({ token }: { token: string | null }) {
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [messages, streaming]);
   useEffect(() => { const el = inputRef.current; if (el) { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 160)}px`; } }, [input]);
 
-  function reset() { setMessages([]); setSteps([]); setDomains([]); setSources([]); setSourcesReceived(false); setTurnStart(null); setTurnEnd(null); setConversationId(null); setTicketId(null); }
+  function reset() { setMessages([]); setSteps([]); setSources([]); setSourcesReceived(false); setTurnStart(null); setTurnEnd(null); setConversationId(null); setTicketId(null); remember(""); }
   async function send(value: string) {
     const text = value.trim();
-    if (!text || text.length > MAX_CHARS || sending.current || !token) return;
+    if (!text || text.length > MAX_CHARS || sending.current || restoring || !token) return;
     sending.current = true;
     const controller = new AbortController(); chatController.current = controller;
     const alive = () => mounted.current && !controller.signal.aborted && getToken("customer") === token;
     const userId = uid();
     setMessages((rows) => [...rows, { id: userId, role: "user", content: text, at: Date.now() }]);
-    setInput(""); setSteps([]); setDomains([]); setSources([]); setSourcesReceived(false); setTurnStart(Date.now()); setTurnEnd(null); setStreaming(true); setDrawer(null);
+    setInput(""); setSteps([]); setSources([]); setSourcesReceived(false); setTurnStart(Date.now()); setTurnEnd(null); setStreaming(true); setDrawer(null);
     const turnSteps: StepEvent[] = [];
     const handle = (event: AgentEvent) => {
       if (!alive()) return;
       switch (event.kind) {
-        case "conversation": setConversationId(event.conversation_id); break;
+        case "conversation": setConversationId(event.conversation_id); remember(event.conversation_id); break;
         case "step": turnSteps.push(event); setSteps([...turnSteps]); break;
         case "message": setMessages((rows) => [...rows, { id: uid(), role: event.role, content: event.content, at: Date.now(), outcome: outcomeOf(turnSteps) }]); break;
         case "error": setMessages((rows) => [...rows, { id: uid(), role: "assistant", content: event.message, at: Date.now(), error: true }]); break;
-        case "knowledge_sources": setSources(event.sources); setSourcesReceived(true); setDomains((rows) => [...rows, event]); break;
+        case "knowledge_sources": setSources(event.sources); setSourcesReceived(true); break;
         case "ticket_update":
-        case "workflow_status": setTicketId(event.ticket_id); setTicketVersion((v) => v + 1); setDomains((rows) => [...rows, event]); break;
+        case "workflow_status": setTicketId(event.ticket_id); setTicketVersion((v) => v + 1); break;
       }
     };
     try {
@@ -148,38 +193,39 @@ function ChatWorkspace({ token }: { token: string | null }) {
       if (err instanceof ApiError && err.status === 404) setConversationId(null);
     } finally {
       sending.current = false;
-      if (alive()) { setBusyNote(null); setStreaming(false); setTurnEnd(Date.now()); setTicketVersion((v) => v + 1); void loadOrders(); inputRef.current?.focus(); }
+      if (alive()) { setBusyNote(null); setStreaming(false); setTurnEnd(Date.now()); setTicketVersion((v) => v + 1); void loadOrders(); void loadHistory(); inputRef.current?.focus(); }
     }
   }
   const selectedOrder = orders.find((o) => o.id === orderId) ?? null;
   const tooLong = input.length > MAX_CHARS;
-  const servicePanel = <div className="space-y-7 p-5">
-    <div className="flex items-center gap-3 border-b border-line pb-5"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand/10"><Logo size={27} /></span><div><h2 className="text-sm font-semibold">售后服务助手</h2><p className="mt-1 text-[11px] text-subtle">让每一步处理都有依据</p></div><Badge className="ml-auto" tone="brand">在线</Badge></div>
-    {token ? <CustomerTickets refreshKey={ticketVersion} suggestedId={ticketId} onChanged={() => void loadOrders()} /> : <p className="text-xs text-muted">登录后查看您的工单。</p>}
+  const servicePanel = <div className="service-content">
+    <section className="sidebar-progress" aria-label="处理进度">
+      <div className="flex items-center justify-between px-4 pt-4"><h2 className="flex items-center gap-2 text-base font-semibold"><Activity size={18} className="text-brand" />处理进度</h2><Badge tone={streaming ? "info" : "neutral"}>{streaming ? "正在处理" : steps.length ? "本轮记录" : "等待咨询"}</Badge></div>
+      <AgentPanel steps={steps} streaming={streaming} startedAt={turnStart} endedAt={turnEnd} showTitle={false} />
+    </section>
+    {token ? <CustomerTickets refreshKey={ticketVersion} suggestedId={ticketId} onChanged={() => void loadOrders()} /> : <p className="text-sm text-muted">登录后查看您的工单。</p>}
     <KnowledgeSources sources={sources} received={sourcesReceived} />
-    <p className="border-t border-line pt-4 text-[10px] leading-relaxed text-subtle">当前仅模拟售后受理，不涉及真实资金或物流。是否通过申请，以业务规则和工单事实为准。</p>
+    <p className="border-t border-line pt-4 text-xs leading-relaxed text-subtle">当前仅模拟售后受理，不涉及真实资金或物流。是否通过申请，以业务规则和工单事实为准。</p>
   </div>;
 
   return <div className="workbench">
     <div className="workspace-main">
-      <div className="workspace-heading"><div><p className="eyebrow">SERVICE DESK / 售后服务</p><h1 className="mt-1 text-xl font-semibold tracking-tight">您好，今天有什么需要帮助？</h1></div><div className="flex items-center gap-1"><Button size="sm" variant="ghost" onClick={() => setDrawer("orders")} disabled={!token}><Package size={15} /> 订单<span className="hidden sm:inline">列表</span></Button><Button size="sm" variant="ghost" className="xl:hidden" onClick={() => setDrawer("service")}><ClipboardList size={15} /> 工单与来源</Button></div></div>
-      {ordersError && <p role="alert" className="mb-3 text-xs text-bad">订单查询失败：{ordersError} <button className="underline" onClick={() => void loadOrders()}>重试</button></p>}
-      <OrderSummary order={selectedOrder} orders={orders} onSelect={setOrderId} onAsk={(text) => void send(text)} disabled={streaming || !token} />
+      <div className="workspace-heading"><div><p className="eyebrow">SERVICE DESK / 售后服务</p><h1 className="mt-1 text-xl font-semibold tracking-tight">您好，今天有什么需要帮助？</h1></div><div className="flex items-center gap-1"><Button size="sm" variant="ghost" onClick={() => setDrawer("orders")} disabled={!token || restoring}><Package size={15} /> 订单<span className="hidden sm:inline">列表</span></Button><Button size="sm" variant="ghost" className="lg:hidden" onClick={() => setDrawer("service")}><ClipboardList size={15} /> 进度与工单</Button></div></div>
+      {ordersError && <p role="alert" className="mb-3 text-sm text-bad">订单查询失败：{ordersError} <button className="underline" onClick={() => void loadOrders()}>重试</button></p>}
+      <OrderSummary order={selectedOrder} orders={orders} onSelect={setOrderId} onAsk={(text) => void send(text)} disabled={streaming || restoring || !token} />
       <section className="chat-card" aria-label="售后对话">
-        <div className="flex items-center justify-between border-b border-line/70 px-5 py-3"><div className="flex items-center gap-2 text-sm font-semibold"><MessageCircle size={16} className="text-brand" /> 客服对话 <span className="text-[10px] font-normal text-subtle">{demo?.customer.name || (token ? "当前客户" : "未登录")}</span></div><Button size="sm" variant="ghost" onClick={reset} disabled={streaming || !messages.length}><RotateCcw size={13} /> 新对话</Button></div>
+        <div className="flex items-center justify-between border-b border-line/70 px-5 py-3"><div className="flex items-center gap-2 text-sm font-semibold"><MessageCircle size={16} className="text-brand" /> 客服对话 <span className="text-xs font-normal text-subtle">{demo?.customer.name || (token ? "当前客户" : "未登录")}</span></div><Button size="sm" variant="ghost" onClick={() => { setDrawer("history"); void loadHistory(); }} disabled={!token || streaming || restoring}><History size={16} /> 历史对话</Button><Button size="sm" variant="ghost" onClick={reset} disabled={streaming || restoring || !messages.length}><RotateCcw size={13} /> 新对话</Button></div>
         <div ref={scrollRef} className="chat-scroll"><div className="mx-auto max-w-4xl space-y-5 px-4 py-6 sm:px-6">
-          {!token && <div className="py-12 text-center"><Logo size={44} /><p className="mt-4 text-sm text-muted">请先登录，再开始售后咨询。</p>{meta?.auth_mode === "dev" && <p className="mt-2 text-xs text-subtle">在顶部开发菜单中选择客户身份。</p>}</div>}
-          {token && !messages.length && <div className="animate-fade-up py-2"><div className="mb-6 flex items-center gap-3"><span className="message-avatar"><Logo size={27} /></span><div><p className="text-base font-semibold">订单问题，我们一起解决。</p><p className="mt-1 text-xs leading-relaxed text-muted">查询订单、排查故障，或告诉我您的换货需求。</p></div></div><div className="grid gap-2 sm:grid-cols-3">{scenarioCards(selectedOrder ? [selectedOrder] : orders).map((card) => <button key={card.key} disabled={streaming} onClick={() => void send(card.prompt)} className="prompt-card"><ArrowUpRight size={15} className="mb-4 text-brand" /><p className="text-xs font-semibold">{card.title}</p><p className="mt-1 text-[11px] leading-relaxed text-subtle">{card.blurb}</p></button>)}</div></div>}
-          {messages.map((m) => <Bubble key={m.id} message={m} />)}
-          {streaming && <div className="flex items-center gap-3 text-xs text-muted" role="status"><span className="message-avatar"><Logo size={24} /></span><span className="flex gap-1">{[0, 150, 300].map((delay) => <span key={delay} className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand/60" style={{ animationDelay: `${delay}ms` }} />)}</span>{busyNote ?? statusLine(steps)}</div>}
+          {!token && <div className="py-12 text-center"><Logo size={44} /><p className="mt-4 text-sm text-muted">请先登录，再开始售后咨询。</p>{meta?.auth_mode === "dev" && <p className="mt-2 text-sm text-subtle">在顶部开发菜单中选择客户身份。</p>}</div>}
+          {token && !restoring && !messages.length && <div className="animate-fade-up py-2"><div className="mb-6 flex items-center gap-3"><span className="message-avatar"><Logo size={27} /></span><div><p className="text-base font-semibold">订单问题，我们一起解决。</p><p className="mt-1 text-sm leading-relaxed text-muted">查询订单、排查故障，或告诉我您的换货需求。</p></div></div><div className="grid gap-2 sm:grid-cols-3">{scenarioCards(selectedOrder ? [selectedOrder] : orders).map((card) => <button key={card.key} disabled={streaming || restoring} onClick={() => void send(card.prompt)} className="prompt-card"><ArrowUpRight size={15} className="mb-4 text-brand" /><p className="text-sm font-semibold">{card.title}</p><p className="mt-1 text-xs leading-relaxed text-subtle">{card.blurb}</p></button>)}</div></div>}
+          {restoring && <p role="status" className="py-8 text-center text-sm text-muted">正在加载您的历史对话…</p>}{messages.map((m) => <Bubble key={m.id} message={m} />)}
+          {streaming && <div className="flex items-center gap-3 text-sm text-muted" role="status"><span className="message-avatar"><Logo size={24} /></span><span className="flex gap-1">{[0, 150, 300].map((delay) => <span key={delay} className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand/60" style={{ animationDelay: `${delay}ms` }} />)}</span>{busyNote ?? statusLine(steps)}</div>}
         </div></div>
-        <form className="composer-wrap" onSubmit={(e) => { e.preventDefault(); void send(input); }}><div className={clsx("composer", tooLong && "border-bad")}><label htmlFor="composer" className="sr-only">消息</label><textarea id="composer" ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(input); } }} rows={1} disabled={!token} placeholder={token ? "描述您的问题，或输入订单号…" : "请先选择客户身份"} className="min-h-[42px] flex-1 resize-none bg-transparent px-3 py-2.5 text-sm placeholder:text-subtle focus:outline-none focus-visible:ring-0" /><button type="submit" aria-label="发送消息" disabled={streaming || !token || !input.trim() || tooLong} className="send-button"><Send size={20} /></button></div><div className="mt-2 flex justify-between px-2 text-[10px] text-subtle"><span>回车发送 · Shift + 回车换行</span><span className={clsx(tooLong && "text-bad")}>{input.length > 1600 ? `${input.length} / ${MAX_CHARS}` : "业务结果以实际查询为准"}</span></div></form>
+        <form className="composer-wrap" onSubmit={(e) => { e.preventDefault(); void send(input); }}><div className={clsx("composer", tooLong && "border-bad")}><label htmlFor="composer" className="sr-only">消息</label><textarea id="composer" ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(input); } }} rows={1} disabled={!token || restoring} placeholder={token ? "描述您的问题，或输入订单号…" : "请先选择客户身份"} className="min-h-[42px] flex-1 resize-none bg-transparent px-3 py-2.5 text-sm placeholder:text-subtle focus:outline-none focus-visible:ring-0" /><button type="submit" aria-label="发送消息" disabled={streaming || restoring || !token || !input.trim() || tooLong} className="send-button"><Send size={20} /></button></div><div className="mt-2 flex justify-between px-2 text-xs text-subtle"><span>回车发送 · Shift + 回车换行</span><span className={clsx(tooLong && "text-bad")}>{input.length > 1600 ? `${input.length} / ${MAX_CHARS}` : "业务结果以实际查询为准"}</span></div></form>
       </section>
     </div>
-    <ResponsivePanel className="service-panel" open={drawer === "service"} onClose={() => setDrawer(null)} title="工单与知识来源">{servicePanel}</ResponsivePanel>
-    <section className={clsx("progress-panel", progressOpen && "is-open")} aria-label="真实处理进度"><button className="progress-toggle" aria-expanded={progressOpen} onClick={() => setProgressOpen((open) => !open)}><span className="flex items-center gap-3"><span className="rounded-full bg-brand/10 p-2 text-brand"><Activity size={18} /></span><span className="text-left"><span className="block text-sm font-semibold">处理进度</span><span className="mt-0.5 block text-[10px] font-normal text-subtle">{steps.length ? `${steps.length} 个真实执行事件` : "发送消息后展示实际处理步骤"}{domains.length ? ` · ${domains.length} 条业务更新` : ""}</span></span></span><span className="flex items-center gap-2 text-xs text-subtle">{streaming ? "正在处理" : steps.length ? "查看记录" : "等待咨询"}<ChevronDown size={16} className={clsx("transition-transform", progressOpen && "rotate-180")} /></span></button>
-      {progressOpen && <div className="progress-content"><AgentPanel steps={steps} streaming={streaming} startedAt={turnStart} endedAt={turnEnd} showTitle={false} /><div className="domain-events">{domains.map((event, i) => <div key={i} className="rounded-xl bg-surface-2 p-3 text-xs text-muted">{event.kind === "knowledge_sources" ? `检索返回 ${event.sources.length} 条知识引用` : event.kind === "ticket_update" ? `收到工单状态更新，正在查询最新事实（${event.ticket_id}）` : `收到工作流更新（${event.state || event.phase || event.status || "状态已更新"}），请查看最新工单。`}</div>)}</div></div>}
-    </section>
-    <Drawer open={drawer === "orders"} onClose={() => setDrawer(null)} title="我的订单"><OrdersPanel orders={orders} loading={ordersLoading} disabled={streaming} onAsk={(text) => void send(text)} onSelect={(id) => { setOrderId(id); setDrawer(null); }} /></Drawer>
+    <ResponsivePanel className="service-panel" open={drawer === "service"} onClose={() => setDrawer(null)} title="处理进度与售后工单">{servicePanel}</ResponsivePanel>
+    <Drawer open={drawer === "orders"} onClose={() => setDrawer(null)} title="我的订单"><OrdersPanel orders={orders} loading={ordersLoading} disabled={streaming || restoring} onAsk={(text) => void send(text)} onSelect={(id) => { setOrderId(id); setDrawer(null); }} /></Drawer>
+    <Drawer open={drawer === "history"} onClose={() => setDrawer(null)} title="历史对话"><ConversationHistory rows={histories} currentId={conversationId} loading={historyLoading || restoring} error={historyError} onSelect={(id) => void openConversation(id)} onRefresh={() => void loadHistory()} /></Drawer>
   </div>;
 }

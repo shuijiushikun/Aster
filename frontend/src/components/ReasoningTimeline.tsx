@@ -14,6 +14,8 @@ import {
 import type { Outcome, StepEvent } from "../types";
 import { OUTCOME_META, money, type Tone } from "../lib/outcome";
 import { ERROR_LABELS, patternLabel, toolLabel } from "../lib/locale";
+import { TICKET_STATUS } from "../lib/tickets";
+import type { TicketStatus } from "../types";
 import Markdown from "./Markdown";
 import { Badge } from "./ui";
 
@@ -25,7 +27,7 @@ const STEP_META: Record<string, { label: string; icon: LucideIcon; tone: Tone }>
   decision: { label: "处理结果", icon: CircleDollarSign, tone: "ok" },
   injection_flag: { label: "疑似指令注入", icon: ShieldAlert, tone: "bad" },
   error: { label: "发生错误", icon: AlertTriangle, tone: "bad" },
-  usage: { label: "词元用量", icon: Gauge, tone: "neutral" },
+  usage: { label: "token 用量", icon: Gauge, tone: "neutral" },
   budget_exhausted: { label: "用量已达上限", icon: Gauge, tone: "warn" },
   output_correction: { label: "回复已纠正", icon: ShieldAlert, tone: "bad" },
   notice: { label: "系统通知", icon: Info, tone: "info" },
@@ -47,10 +49,10 @@ const DOT: Record<Tone, string> = {
 function Json({ value, label = "技术详情" }: { value: unknown; label?: string }) {
   return (
     <details className="group mt-1.5">
-      <summary className="cursor-pointer select-none text-[11px] font-medium text-subtle hover:text-muted">
+      <summary className="cursor-pointer select-none text-xs font-medium text-subtle hover:text-muted">
         {label}
       </summary>
-      <pre className="mt-1 max-h-56 overflow-auto rounded-md bg-surface-2 p-2 font-mono text-[11px] leading-relaxed text-muted">
+      <pre className="mt-1 max-h-56 overflow-auto rounded-md bg-surface-2 p-2 font-mono text-xs leading-relaxed text-muted">
         {JSON.stringify(value, null, 2)}
       </pre>
     </details>
@@ -66,8 +68,23 @@ export function DecisionBadge({ decision }: { decision?: string }) {
 function argsSummary(args: Record<string, unknown> | undefined): string {
   if (!args) return "";
   return Object.entries(args)
-    .map(([k, v]) => `${({ order_id: "订单号", reason: "说明" } as Record<string, string>)[k] ?? k}：${String(v)}`)
-    .join(", ");
+    .filter(([, v]) => v != null && v !== "")
+    .map(([k, v]) => `${({ order_id: "订单号", reason: "说明", query: "咨询内容", model_code: "商品型号", ticket_id: "工单号", limit: "最多条数", description: "问题描述", requested_change: "更换要求", reason_type: "原因" } as Record<string, string>)[k] ?? "查询条件"}：${v === "defect" ? "商品故障" : v === "size" ? "尺码不合适" : String(v)}`)
+    .join("，");
+}
+
+function resultSummary(tool: string, raw: Record<string, any>): string {
+  const r = raw.ok === true ? raw.data : raw;
+  if (tool === "search_knowledge") {
+    if (r.status === "unavailable") return "知识检索服务暂不可用，尚未取得资料。";
+    if (r.status === "insufficient_evidence") return "未找到与本次问题相关的有效资料。";
+    return `找到 ${r.sources?.length ?? 0} 条资料，来源和摘录显示在下方。`;
+  }
+  if (tool === "list_my_orders") return `已读取 ${r.orders?.length ?? 0} 笔本人订单。`;
+  if (tool === "get_order") return `已核实订单 ${r.order_id ?? ""}${r.product_name ? `，商品：${r.product_name}` : ""}。`;
+  if (tool === "get_tickets") return `已查询到 ${r.tickets?.length ?? 0} 笔售后工单。`;
+  if (tool === "create_exchange_request") return `申请已保存，${TICKET_STATUS[r.status as TicketStatus]?.label ?? "请查看工单进度"}。`;
+  return "已取得查询结果。";
 }
 
 function StepBody({ step }: { step: StepEvent }) {
@@ -81,29 +98,33 @@ function StepBody({ step }: { step: StepEvent }) {
       );
     case "tool_call":
       return (
-        <div className="break-words text-xs leading-5 text-info">
+        <div className="break-words text-sm leading-5 text-info">
           {toolLabel(p.tool)}{p.args && Object.keys(p.args).length > 0 ? `（${argsSummary(p.args)}）` : ""}
           <Json value={{ tool: p.tool, args: p.args }} />
         </div>
       );
     case "policy_eval":
     case "decision": {
-      const r = p.result || {};
+      const raw = p.result || {};
+      const r = raw.ok === true ? raw.data : raw;
+      if (raw.ok === false) {
+        return <p className="text-sm text-bad">{raw.error?.message ?? "暂未取得办理结果"}</p>;
+      }
       return (
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-muted">{toolLabel(p.tool)}</span>
+            <span className="text-sm text-muted">{toolLabel(p.tool)}</span>
             {step.step_type === "policy_eval" ? (
               <Badge tone={r.eligible ? "info" : "bad"}>
                 {r.requires_escalation ? "需人工审核" : r.eligible ? "符合退款条件" : "不符合退款条件"}
               </Badge>
             ) : <DecisionBadge decision={r.decision} />}
             {typeof r.amount === "number" && (
-              <span className="text-xs text-muted">{money(r.amount)}</span>
+              <span className="text-sm text-muted">{money(r.amount)}</span>
             )}
           </div>
           {Array.isArray(r.reasons) && r.reasons.length > 0 && (
-            <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-xs text-muted">
+            <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-sm text-muted">
               {r.reasons.map((reason: string, i: number) => (
                 <li key={i}>{reason}</li>
               ))}
@@ -117,49 +138,50 @@ function StepBody({ step }: { step: StepEvent }) {
       const r = p.result || {};
       return (
         <div>
-          <span className="text-xs text-muted">{toolLabel(p.tool)}</span>
+          <span className="text-sm text-muted">{toolLabel(p.tool)}</span>
           {r.error && (
             <Badge tone="bad" className="ml-2">
-              {ERROR_LABELS[String(r.error)] ?? "工具执行失败"}
+              {typeof r.error === "object" ? r.error.message : ERROR_LABELS[String(r.error)] ?? "工具执行失败"}
             </Badge>
           )}
+          {!r.error && <p className="mt-1 text-sm leading-relaxed text-muted">{resultSummary(p.tool, r)}</p>}
           <Json value={r} label="原始结果" />
         </div>
       );
     }
     case "injection_flag":
       return (
-        <p className="text-xs text-bad">
+        <p className="text-sm text-bad">
           检测到：{(p.patterns || []).map(patternLabel).join("、")}。处理结果仍由退款规则决定。
         </p>
       );
     case "usage":
       return (
-        <p className="font-mono text-[11px] text-subtle">
+        <p className="font-mono text-xs text-subtle">
           {p.status === "unknown" ? "本次调用用量未知" : <>输入 {p.input_tokens ?? "未知"} · 输出 {p.output_tokens ?? "未知"}</>}
           {p.model ? ` · ${p.model}` : ""}
         </p>
       );
     case "notice":
-      return <p className="text-xs text-info">{p.message}</p>;
+      return <p className="text-sm text-info">{p.message}</p>;
     case "budget_exhausted":
-      return <p className="text-xs text-warn">当前会话或账户用量已达上限，请新建对话或联系人工客服。</p>;
+      return <p className="text-sm text-warn">当前会话或账户用量已达上限，请新建对话或联系人工客服。</p>;
     case "output_correction":
-      return <p className="text-xs text-bad">{p.reason}</p>;
+      return <p className="text-sm text-bad">{p.reason}</p>;
     case "error":
-      return <p className="text-xs text-bad">模型调用未完成，请稍后重试。</p>;
+      return <p className="text-sm text-bad">模型调用未完成，请稍后重试。</p>;
     case "trace":
       return p.url ? (
         <a
           href={p.url}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"
+          className="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
         >
           在 Opik 中查看 <ExternalLink size={12} />
         </a>
       ) : (
-        <code className="font-mono text-[11px] text-subtle">{p.trace_id}</code>
+        <code className="font-mono text-xs text-subtle">{p.trace_id}</code>
       );
     default:
       return <Json value={p} />;
@@ -194,10 +216,10 @@ export default function ReasoningTimeline({
             </span>
             <div className="min-w-0 flex-1 pb-1">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-subtle">
+                <span className="text-xs font-semibold uppercase tracking-wide text-subtle">
                   {meta.label}
                 </span>
-                <span className="font-mono text-[10px] text-subtle">#{step.seq}</span>
+                <span className="font-mono text-xs text-subtle">#{step.seq}</span>
               </div>
               <div className="mt-0.5">
                 <StepBody step={step} />

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.after_sales.locking import begin_order_write, lock_order
+from app.after_sales.requests import remember, replay
 from app.after_sales.schemas import (
     AdminTicketDetail,
     ApprovalOut,
@@ -120,6 +121,22 @@ class TicketService:
             raise _conflict("该订单存在需要人工处置的工单。", "MANUAL_REQUIRED")
         return None
 
+    @staticmethod
+    def exchange_request_payload(order_id, conversation_id, data):
+        # 检索凭据是短时传输材料；重放比较客户的办理参数，不比较新旧检索片段。
+        return {"order_id": order_id, "conversation_id": conversation_id,
+                **data.model_dump(mode="json", exclude={"evidence_refs"})}
+
+    async def recorded_exchange(self, principal, order_id, data, conversation_id, request_id):
+        _require_role(principal, "customer")
+        async with db.SessionLocal() as session:
+            order = await session.get(Order, order_id)
+            if order is None or order.customer_id != principal.sub:
+                raise _not_found()
+            receipt = await replay(session, principal.sub, "create_exchange_request", request_id,
+                                  self.exchange_request_payload(order_id, conversation_id, data))
+            return await session.get(AfterSalesTicket, receipt["ticket_id"]) if receipt else None
+
     async def create_or_find_exchange(
         self,
         principal: Principal,
@@ -128,6 +145,7 @@ class TicketService:
         *,
         origin_conversation_id: str | None = None,
         start_open: bool = False,
+        request_id: str | None = None,
     ) -> AfterSalesTicket:
         _require_role(principal, "customer")
         try:
@@ -140,9 +158,15 @@ class TicketService:
                     conversation = await session.get(Conversation, origin_conversation_id)
                     if conversation is None or conversation.customer_id != principal.sub:
                         raise _not_found()
+                payload = self.exchange_request_payload(order_id, origin_conversation_id, data)
+                receipt = await replay(session, principal.sub, "create_exchange_request", request_id, payload)
+                if receipt is not None:
+                    return await session.get(AfterSalesTicket, receipt["ticket_id"])
                 # 先查既有业务事实；审批等待期间不以新一轮聊天时间重新判断申请期限。
                 existing = await self._existing(session, order_id)
                 if existing:
+                    remember(session, principal.sub, "create_exchange_request", request_id,
+                             payload, {"ticket_id": existing.id})
                     return existing
                 submitted_at = utcnow()
                 result = evaluate_exchange(
@@ -184,9 +208,16 @@ class TicketService:
                         "missing_fields": result.missing_fields,
                     },
                 )
+                remember(session, principal.sub, "create_exchange_request", request_id,
+                         payload, {"ticket_id": ticket.id})
                 return ticket
         except IntegrityError:
             # 部分唯一索引为跨会话最终防线；只返回授权订单上实际胜出的既有事实。
+            recorded = await self.recorded_exchange(
+                principal, order_id, data, origin_conversation_id, request_id,
+            ) if request_id else None
+            if recorded is not None:
+                return recorded
             async with db.SessionLocal() as session:
                 existing = await self._existing(session, order_id)
                 if existing and existing.customer_id == principal.sub:
@@ -421,7 +452,7 @@ class TicketService:
             await session.flush()
             return acceptance
 
-    async def list_tickets(self, principal: Principal, *, status=None, limit=50, offset=0):
+    async def list_tickets(self, principal: Principal, *, status=None, limit=50, offset=0, order_id=None):
         _require_role(principal)
         owner = principal.scope if principal.is_admin else principal.sub
         stmt = select(AfterSalesTicket)
@@ -429,6 +460,8 @@ class TicketService:
             stmt = stmt.where(AfterSalesTicket.customer_id == owner)
         if status is not None:
             stmt = stmt.where(AfterSalesTicket.status == status)
+        if order_id is not None:
+            stmt = stmt.where(AfterSalesTicket.order_id == order_id)
         async with db.SessionLocal() as session:
             rows = await session.scalars(
                 stmt.order_by(AfterSalesTicket.created_at.desc(), AfterSalesTicket.id.desc())

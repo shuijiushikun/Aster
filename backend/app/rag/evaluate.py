@@ -3,15 +3,33 @@
 import argparse
 import asyncio
 import json
+import math
 import time
 from pathlib import Path
 
+from llama_index.core.schema import QueryBundle
+
 from app.config import BACKEND_ROOT, get_settings
 from app.rag.corpus import load_corpus
-from app.rag.retriever import KnowledgeRetriever
-from app.rag.store import open_store
+from app.rag.retriever import KnowledgeRetriever, scope_filter
+from app.rag.sparse import BM25_B, BM25_K1, SPARSE_VERSION
+from app.rag.store import open_store, read_manifest
 
 CASES = BACKEND_ROOT / "data" / "retrieval_cases.json"
+
+
+def select_threshold(rows, field, *, upper=None):
+    scores = sorted({float(row[field]) for row in rows})
+    thresholds = [0.0, upper if upper is not None else math.nextafter(scores[-1], math.inf)]
+    thresholds.extend((a + b) / 2 for a, b in zip(scores, scores[1:], strict=False))
+
+    def quality(threshold):
+        correct = sum((row[field] >= threshold) == bool(row["expected"]) for row in rows)
+        false_positive = sum(row[field] >= threshold and not row["expected"] for row in rows)
+        return correct, -false_positive, threshold
+
+    threshold = max(thresholds, key=quality)
+    return threshold, quality(threshold)[0]
 
 
 async def evaluate(*, calibrate=False) -> dict:
@@ -26,6 +44,7 @@ async def evaluate(*, calibrate=False) -> dict:
     rows = []
     async with open_store(settings) as (store, client):
         retriever = KnowledgeRetriever(store, client, settings)
+        manifest = await read_manifest(client, settings) if calibrate else None
         # 各模式共享同一批真实查询向量；避免比较时重复计费。
         embeddings = await retriever.embedding.aget_text_embedding_batch([c["query"] for c in cases])
         for case, vector in zip(cases, embeddings, strict=True):
@@ -48,23 +67,28 @@ async def evaluate(*, calibrate=False) -> dict:
                     valid_citations=valid, citations=len(result.sources), cross_model=cross,
                     elapsed_ms=round((time.perf_counter()-start)*1000),
                     sources=[dict(document_id=s.document_id, chunk_index=s.chunk_index) for s in result.sources]))
+                if calibrate:
+                    sparse = await retriever.recall(QueryBundle(query_str=case["query"], embedding=vector),
+                        scope_filter(manifest, case["model_code"], case["category"]), "sparse")
+                    rows[-1]["bm25_score"] = float(sparse[0].score or 0) if sparse else 0.0
     report = dict(embedding_model=settings.embed_model_name, dimension=settings.embed_dimension,
                   rerank_model=settings.rerank_model, generation=generation,
-                  min_dense_score=settings.rag_min_dense_score, split="calibration" if calibrate else "evaluation")
+                  collection=settings.qdrant_collection, sparse_version=SPARSE_VERSION,
+                  bm25_k1=BM25_K1, bm25_b=BM25_B,
+                  min_dense_score=settings.rag_min_dense_score, min_bm25_score=settings.rag_min_bm25_score,
+                  split="calibration" if calibrate else "evaluation")
     if calibrate:
         if any(r["status"] == "unavailable" for r in rows):
             raise RuntimeError("calibration dependency unavailable")
         if any(r["expected"] and r["status"] != "ok" for r in rows):
             raise RuntimeError("calibration positive cases have no candidates; check index before calibrating")
-        scores = sorted({r["score"] for r in rows})
-        thresholds = [0.0, 1.0] + [(a+b)/2 for a, b in zip(scores, scores[1:], strict=False)]
-        def quality(threshold):
-            correct = sum((r["score"] >= threshold) == bool(r["expected"]) for r in rows)
-            false_positive = sum(r["score"] >= threshold and not r["expected"] for r in rows)
-            return correct, -false_positive
-        threshold = max(thresholds, key=quality)
-        report.update(suggested_min_dense_score=round(threshold, 6),
-                      calibration_correct=quality(threshold)[0], cases=len(rows), rows=rows)
+        threshold, correct = select_threshold(rows, "score", upper=1.0)
+        bm25_threshold, bm25_correct = select_threshold(rows, "bm25_score")
+        report.update(suggested_min_dense_score=threshold, suggested_min_bm25_score=bm25_threshold,
+                      calibration_correct=correct, bm25_calibration_correct=bm25_correct,
+                      hybrid_calibration_correct=sum(
+                          ((r["score"] >= threshold) or (r["bm25_score"] >= bm25_threshold))
+                          == bool(r["expected"]) for r in rows), cases=len(rows), rows=rows)
         return report
     summaries = {}
     for mode in {r["mode"] for r in rows}:
@@ -80,7 +104,8 @@ async def evaluate(*, calibrate=False) -> dict:
             citation_validity=sum(r["valid_citations"] for r in subset)/citations if citations else 0,
             cross_model=sum(r["cross_model"] for r in subset),
             errors=sum(r["status"] == "unavailable" for r in subset),
-            rerank_fallbacks=sum(bool(r["warnings"]) for r in subset),
+            rerank_fallbacks=sum("rerank_unavailable" in r["warnings"] for r in subset),
+            bm25_recoveries=sum("bm25_recall_fallback" in r["warnings"] for r in subset),
             mean_retrieval_ms=round(sum(r["elapsed_ms"] for r in subset)/len(subset)),
         )
     report.update(summary=summaries, rows=rows, note="Small hand-labelled demonstration set; latency excludes shared query embedding batch.")

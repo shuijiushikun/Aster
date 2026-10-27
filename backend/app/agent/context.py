@@ -141,6 +141,15 @@ def identifiers(messages, prefix: str) -> set[str]:
 def grounded_id(messages, candidate: str | None, prefix: str) -> str | None:
     users = user_messages(messages)
     ids = identifiers(messages, prefix)
+    if not ids and prefix == "ORD":
+        resolved = context_data(messages).get("facts", {}).get("resolved_order_id")
+        if resolved:
+            return resolved if candidate is None or candidate.casefold() == resolved.casefold() else None
+        if re.search(r"(?<![A-Za-z0-9_.-])[0-9]{4,}(?![A-Za-z0-9_.-])", current_text(messages)):
+            return None
+        previous = context_data(messages).get("facts", {}).get("previous_order_id")
+        if previous:
+            return previous if candidate is None or candidate.casefold() == previous.casefold() else None
     # A short continuation may refer to the immediately preceding user order.
     if not ids and len(users) > 1:
         ids = identifiers([users[-2]], prefix)

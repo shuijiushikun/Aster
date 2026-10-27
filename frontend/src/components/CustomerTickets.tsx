@@ -23,16 +23,16 @@ function SupplementForm({ ticket, disabled, pending, onEdit, onSubmit }: {
     onSubmit({ description: description.trim(), ...(reason ? { reason_type: reason as "size" | "defect" } : {}), ...(change.trim() ? { requested_change: change.trim() } : {}) });
   }}>
     <h3 className="text-sm font-semibold">补充申请材料</h3>
-    <label className="block text-xs font-medium">问题描述
+    <label className="block text-sm font-medium">问题描述
       <textarea required value={description} maxLength={2000} rows={3} disabled={disabled}
         onChange={(e) => { setDescription(e.target.value); onEdit(); }} className="form-field mt-1.5" />
     </label>
-    <label className="block text-xs font-medium">换货原因
+    <label className="block text-sm font-medium">换货原因
       <select value={reason} disabled={disabled} onChange={(e) => { setReason(e.target.value); onEdit(); }} className="form-field mt-1.5">
         <option value="">尚未确定</option><option value="defect">商品故障</option><option value="size">尺码不合适</option>
       </select>
     </label>
-    <label className="block text-xs font-medium">希望更换为
+    <label className="block text-sm font-medium">希望更换为
       <input value={change} maxLength={500} disabled={disabled} placeholder="例如：同型号，或所需尺码" onChange={(e) => { setChange(e.target.value); onEdit(); }} className="form-field mt-1.5" />
     </label>
     <Button type="submit" variant="primary" size="sm" disabled={disabled || pending || !description.trim()}>提交补充材料</Button>
@@ -104,38 +104,38 @@ export default function CustomerTickets({ refreshKey, suggestedId, onChanged }: 
   return <section aria-label="我的售后工单" className="space-y-4">
     <div className="flex items-center justify-between"><h2 className="flex items-center gap-2 text-sm font-semibold"><ClipboardList size={16} className="text-brand" /> 我的工单</h2>
       <Button size="sm" variant="ghost" disabled={busy} onClick={() => setVersion((v) => v + 1)}><RefreshCw size={13} /> 刷新</Button></div>
-    {listError && <p role="alert" className="text-xs text-bad">{listError}</p>}
+    {listError && <p role="alert" className="text-sm text-bad">{listError}</p>}
     {tickets === null && !listError && <Skeleton className="h-20" />}
     {!selectedId ? <div className="space-y-2">
-      {tickets?.length === 0 && <div className="rounded-2xl border border-dashed border-line p-5 text-center"><ClipboardList size={25} className="mx-auto mb-2 text-brand/50" /><p className="text-xs text-muted">还没有售后工单</p><p className="mt-1 text-[11px] leading-relaxed text-subtle">在对话中说明订单与换货需求，助手会协助核验。</p></div>}
+      {tickets?.length === 0 && <div className="rounded-2xl border border-dashed border-line p-5 text-center"><ClipboardList size={25} className="mx-auto mb-2 text-brand/50" /><p className="text-sm text-muted">还没有售后工单</p><p className="mt-1 text-xs leading-relaxed text-subtle">在对话中说明订单与换货需求，助手会协助核验。</p></div>}
       {tickets?.map((t) => <button key={t.id} onClick={() => { setSelectedId(t.id); setNotice(null); setReceipt(null); }} className="w-full rounded-2xl border border-line bg-surface p-3.5 text-left transition hover:border-brand/40">
-        <div className="flex items-center justify-between gap-2"><span className="font-mono text-[11px]">{t.order_id}</span><Badge tone={TICKET_STATUS[t.status].tone}>{TICKET_STATUS[t.status].label}</Badge></div>
-        <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted">{t.description}</p><p className="mt-2 text-[10px] text-subtle">{formatDate(t.updated_at)} {formatTime(t.updated_at)}</p>
+        <div className="flex items-center justify-between gap-2"><span className="font-mono text-xs">{t.order_id}</span><Badge tone={TICKET_STATUS[t.status].tone}>{TICKET_STATUS[t.status].label}</Badge></div>
+        <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-muted">{t.description}</p><p className="mt-2 text-xs text-subtle">{formatDate(t.updated_at)} {formatTime(t.updated_at)}</p>
       </button>)}
     </div> : <div className="space-y-4">
-      <button disabled={busy} onClick={() => { setSelectedId(null); setNotice(null); setReceipt(null); }} className="flex items-center gap-1 text-xs text-muted hover:text-brand"><ArrowLeft size={13} /> 返回全部工单</button>
-      {receipt?.ticket_id === selectedId && <p role="status" className="rounded-xl bg-brand/10 p-3 text-xs leading-relaxed text-brand">请求已接收（{TICKET_STATUS[receipt.status].label}）。接收回执不代表处理完成，下方详情以重新查询的结果为准。</p>}
-      {notice && <p role="alert" className="rounded-xl bg-warn/10 p-3 text-xs leading-relaxed text-warn">{notice}</p>}
-      {detailError ? <p role="alert" className="text-xs text-bad">{detailError} 请刷新重试。</p> : !current ? <Skeleton className="h-36" /> : <>
+      <button disabled={busy} onClick={() => { setSelectedId(null); setNotice(null); setReceipt(null); }} className="flex items-center gap-1 text-sm text-muted hover:text-brand"><ArrowLeft size={13} /> 返回全部工单</button>
+      {receipt?.ticket_id === selectedId && <p role="status" className="rounded-xl bg-brand/10 p-3 text-sm leading-relaxed text-brand">请求已接收（{TICKET_STATUS[receipt.status].label}）。接收回执不代表处理完成，下方详情以重新查询的结果为准。</p>}
+      {notice && <p role="alert" className="rounded-xl bg-warn/10 p-3 text-sm leading-relaxed text-warn">{notice}</p>}
+      {detailError ? <p role="alert" className="text-sm text-bad">{detailError} 请刷新重试。</p> : !current ? <Skeleton className="h-36" /> : <>
         <div className="rounded-2xl border border-line bg-surface p-4">
           <Badge tone={TICKET_STATUS[current.status].tone}>{TICKET_STATUS[current.status].label}</Badge>
-          <p className="mt-3 text-xs font-semibold">订单 {current.order_id}</p><p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-muted">{current.description}</p>
-          <p className="mt-2 text-xs text-subtle">原因：{current.reason_type === "size" ? "尺码不合适" : current.reason_type === "defect" ? "商品故障" : "待补充"}</p>
-          <p className="mt-1 whitespace-pre-wrap break-words text-xs text-subtle">更换要求：{current.requested_change || "待补充"}</p>
-          {current.reference_code && <p className="mt-3 break-all text-xs font-semibold text-ok">模拟受理单：{current.reference_code}</p>}
-          <p className="mt-3 break-all font-mono text-[10px] text-subtle">工单 {current.id}</p>
+          <p className="mt-3 text-sm font-semibold">订单 {current.order_id}</p><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted">{current.description}</p>
+          <p className="mt-2 text-sm text-subtle">原因：{current.reason_type === "size" ? "尺码不合适" : current.reason_type === "defect" ? "商品故障" : "待补充"}</p>
+          <p className="mt-1 whitespace-pre-wrap break-words text-sm text-subtle">更换要求：{current.requested_change || "待补充"}</p>
+          {current.reference_code && <p className="mt-3 break-all text-sm font-semibold text-ok">模拟受理单：{current.reference_code}</p>}
+          <p className="mt-3 break-all font-mono text-xs text-subtle">工单 {current.id}</p>
         </div>
-        {retry && <div className="space-y-2 rounded-2xl border border-warn/30 bg-warn/5 p-3 text-xs">
-          <p>待确认请求：{retry.kind === "cancel" ? "取消工单" : "补充材料"}</p><p className="break-all font-mono text-[10px] text-subtle">{retry.body.request_id}</p>
+        {retry && <div className="space-y-2 rounded-2xl border border-warn/30 bg-warn/5 p-3 text-sm">
+          <p>待确认请求：{retry.kind === "cancel" ? "取消工单" : "补充材料"}</p><p className="break-all font-mono text-xs text-subtle">{retry.body.request_id}</p>
           {retry.kind === "supplement" && <p className="whitespace-pre-wrap break-words text-muted">{retry.body.description} · {retry.body.requested_change || "未指定更换要求"}</p>}
           <Button size="sm" disabled={busy} onClick={() => void execute(current.id, retry)}>重试上次请求</Button>
         </div>}
         {current.status === "WAITING_INFO" && <SupplementForm key={current.id} ticket={current} pending={Boolean(retry)} disabled={busy || retry?.kind === "cancel"} onEdit={() => { if (retry?.kind === "supplement") clearPending(current.id); }}
           onSubmit={(body) => { if (!retry) void execute(current.id, { kind: "supplement", body: { request_id: crypto.randomUUID(), ...body } }); }} />}
         {["WAITING_INFO", "PENDING_REVIEW"].includes(current.status) && <Button size="sm" className="w-full" disabled={busy || Boolean(retry)} onClick={() => void execute(current.id, { kind: "cancel", body: { request_id: crypto.randomUUID() } })}>取消换货申请</Button>}
-        <details className="border-t border-line pt-3"><summary className="cursor-pointer text-xs text-muted">申请记录与证据（{current.events.length}）</summary>
-          <div className="mt-3 space-y-3">{current.evidence_refs.map((ref, i) => <blockquote key={i} className="rounded-xl bg-surface-2 p-3 text-xs text-muted"><p className="font-mono text-[10px]">{ref.document_id} · v{ref.revision} · 片段 {ref.chunk_index}</p><p className="mt-1">{ref.excerpt || "无摘录"}</p></blockquote>)}
-            {current.events.map((event) => <div key={event.id} className={clsx("border-l-2 border-line pl-3 text-xs")}><p className="break-words">{EVENT_LABELS[event.kind] || "工单状态更新"}</p><p className="mt-1 text-[10px] text-subtle">{formatDate(event.created_at)} {formatTime(event.created_at)}</p></div>)}
+        <details className="border-t border-line pt-3"><summary className="cursor-pointer text-sm text-muted">申请记录与证据（{current.events.length}）</summary>
+          <div className="mt-3 space-y-3">{current.evidence_refs.map((ref, i) => <blockquote key={i} className="rounded-xl bg-surface-2 p-3 text-sm text-muted"><p className="font-mono text-xs">{ref.document_id} · v{ref.revision} · 片段 {ref.chunk_index}</p><p className="mt-1">{ref.excerpt || "无摘录"}</p></blockquote>)}
+            {current.events.map((event) => <div key={event.id} className={clsx("border-l-2 border-line pl-3 text-sm")}><p className="break-words">{EVENT_LABELS[event.kind] || "工单状态更新"}</p><p className="mt-1 text-xs text-subtle">{formatDate(event.created_at)} {formatTime(event.created_at)}</p></div>)}
           </div>
         </details>
       </>}

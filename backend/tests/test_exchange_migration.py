@@ -57,6 +57,7 @@ def test_exchange_migration_keeps_legacy_data_and_refund_index(tmp_path):
             "ticket_requests",
             "conversation_summaries",
             "knowledge_documents",
+            "agent_tool_requests",
         } <= tables
         assert connection.execute(
             "SELECT sql FROM sqlite_master WHERE name='uq_refunds_one_approved_per_order'"

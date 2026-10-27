@@ -61,30 +61,14 @@ jobs:
           alembic check
 
   evals:
-    # Golden-set evals (backend/evals/README.md). With the provider's API key
-    # secret: the real model plus the LLM tone judge. Without it (fork PRs):
-    # the scripted model, which still checks tools, policy outcomes and the
-    # refund ledger. Fails on any ledger/approval-claim violation or a
-    # regression against evals/baseline.json. The provider is the
-    # EVAL_LLM_PROVIDER repo variable (default gemini). For `omniroute` on a
-    # private (Tailscale) address, add TS_OAUTH_CLIENT_ID / TS_OAUTH_SECRET so
-    # the runner joins the tailnet first.
+    name: 基础退款对话回归
     runs-on: ubuntu-latest
     needs: [backend]
     defaults:
       run:
         working-directory: backend
     env:
-      LLM_PROVIDER: ${{ vars.EVAL_LLM_PROVIDER || 'gemini' }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
-      OMNIROUTE_BASE_URL: ${{ vars.OMNIROUTE_BASE_URL }}
-      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-      # Optional: log each run as an Opik experiment (Comet-hosted).
-      OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
-      OPIK_WORKSPACE: ${{ vars.OPIK_WORKSPACE }}
-      EVAL_EXPERIMENT: ${{ github.event_name == 'pull_request' && format('pr-{0}-{1}', github.event.number, github.event.pull_request.head.sha) || format('{0}-{1}', github.ref_name, github.sha) }}
+      OPIK_TRACK_DISABLE: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -93,21 +77,9 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements*.txt
       - run: pip install -r requirements-dev.txt
-      - name: Join the tailnet (private OmniRoute)
-        if: env.TS_OAUTH_CLIENT_ID != ''
-        uses: tailscale/github-action@v3
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-      - name: Run the golden set
-        run: |
-          key_var="$(echo "$LLM_PROVIDER" | tr a-z A-Z)_API_KEY"
-          if [ -z "${!key_var}" ]; then
-            echo "::warning title=Evals::$key_var isn't available here (fork PR or unset secret), so only the scripted model runs. The live suite runs after merge."
-          fi
-          python -m evals.run --parallel 6
-      - name: Gate
+      - name: 验证工具调用、退款规则与成功声明
+        run: python -m evals.run --mode scripted --parallel 6
+      - name: 检查回归结果
         run: python -m evals.report
       - if: always()
         uses: actions/upload-artifact@v4

@@ -148,7 +148,8 @@ def tracer_for_turn(conversation_id: str, customer_id: str, *, scripted: bool):
         from opik.integrations.langchain import OpikTracer
 
         provider = "fake" if scripted else settings.llm_provider
-        tags = [f"provider:{provider}", f"prompt:{prompt_version()}"]
+        version = prompt_version(unified=settings.agent_v2_enabled and not scripted)
+        tags = [f"provider:{provider}", f"prompt:{version}"]
         tags.append("scripted" if scripted else "live")
         if settings.is_demo:
             tags.append("demo")
@@ -159,7 +160,7 @@ def tracer_for_turn(conversation_id: str, customer_id: str, *, scripted: bool):
             metadata={
                 "customer_id": customer_id,
                 "env": settings.env,
-                "prompt_version": prompt_version(),
+                "prompt_version": version,
             },
             # 同一进程内有多轮对话并发执行，应避免修改共享的 Opik 上下文栈。
             opik_context_read_only_mode=True,

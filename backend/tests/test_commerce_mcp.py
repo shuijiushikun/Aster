@@ -1,8 +1,8 @@
 """仅覆盖 T2 的真实 SDK/HTTP 合同、身份隔离和依赖失败。"""
 
-import asyncio
 import json
 import time
+from uuid import uuid4
 
 import httpx
 import jwt
@@ -11,67 +11,23 @@ from sqlalchemy import func, select
 
 from app.agent.tools import ToolContext, tool_config
 from app.auth import Principal, mint_token
-from app.commerce_mcp.server import create_app
-from app.config import Settings
 from app.db import session as db
-from app.db.models import AfterSalesTicket, ExchangeAcceptance, Refund
+from app.db.models import AfterSalesTicket, Conversation, ExchangeAcceptance, Message, Refund
 from app.mcp.auth import mint_service_token
 from app.mcp.client import CommerceClient
+from app.mcp.schemas import RESULT_TYPES, WRITE_TOOLS
 from app.mcp.tools import build_commerce_tools
-from tests.seed_data import seed_exchange_samples
 
 ALICE = Principal("CUST-EX-001", "customer")
 BOB = Principal("CUST-EX-002", "customer")
 
 
-@pytest.fixture
-def mcp_settings():
-    return Settings(
-        _env_file=None,
-        commerce_mcp_service_secret="test-mcp-secret-which-is-at-least-32-chars",
-        commerce_mcp_url="http://127.0.0.1:8001/mcp",
-        commerce_mcp_timeout_s=2,
-        commerce_mcp_max_retries=0,
-    )
-
-
-@pytest.fixture
-async def mcp_client(engine, mcp_settings):
-    await seed_exchange_samples()
-    app = create_app(mcp_settings)
-
-    def factory(**kwargs):
-        return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), **kwargs)
-
-    # pytest-asyncio 的 yield fixture 在不同 task 中收尾；SDK 的 AnyIO cancel scope
-    # 必须在进入它的同一 task 退出，所以让应用 lifespan 拥有独立、完整的 task。
-    started, stopped = asyncio.Event(), asyncio.Event()
-
-    async def lifespan():
-        async with app.router.lifespan_context(app):
-            started.set()
-            await stopped.wait()
-
-    task = asyncio.create_task(lifespan())
-    try:
-        await asyncio.wait_for(started.wait(), timeout=5)
-        yield CommerceClient(mcp_settings, http_client_factory=factory), app, factory
-    finally:
-        stopped.set()
-        await task
-
-
 async def test_four_read_tools_and_customer_isolation(mcp_client):
     client, _, _ = mcp_client
     tools = await client.list_tools(ALICE)
-    assert {t.name for t in tools} == {
-        "list_my_orders",
-        "get_order",
-        "get_product",
-        "get_exchange_policy_facts",
-    }
+    assert {t.name for t in tools} == set(RESULT_TYPES)
     for tool in tools:
-        assert tool.annotations.readOnlyHint is True
+        assert tool.annotations.readOnlyHint is (tool.name not in WRITE_TOOLS)
         assert tool.outputSchema
         assert not (
             {"customer_id", "sub", "token", "ctx", "config"} & tool.inputSchema["properties"].keys()
@@ -137,10 +93,49 @@ async def test_invalid_arguments_and_writes_are_not_exposed(mcp_client):
     result = await client.call(ALICE, "list_my_orders", {"limit": 21})
     assert not result.ok and result.error.code == "INVALID_ARGUMENT"
     result = await client.call(ALICE, "issue_refund", {"order_id": "ORD-EX-1001"})
-    assert not result.ok and result.error.code == "INVALID_ARGUMENT"
+    assert not result.ok and result.error.code == "ACTION_NOT_REQUESTED"
     async with db.SessionLocal() as session:
         for model in (Refund, AfterSalesTicket, ExchangeAcceptance):
             assert await session.scalar(select(func.count()).select_from(model)) == 0
+
+
+async def turn_context(text, customer_id=ALICE.sub):
+    async with db.SessionLocal() as session:
+        conversation = Conversation(id="mcp-" + uuid4().hex, customer_id=customer_id)
+        session.add(conversation)
+        await session.flush()
+        message = Message(conversation_id=conversation.id, role="user", content=text)
+        session.add(message)
+        await session.commit()
+        return {"conversation_id": conversation.id, "message_id": message.id}
+
+
+async def test_mcp_refund_replays_same_request_without_a_second_ledger_row(mcp_client):
+    client, _, _ = mcp_client
+    context = await turn_context("ORD-EX-1001 帮我退款")
+    args = {"order_id": "ORD-EX-1001"}
+    first = await client.call(ALICE, "issue_refund", args, turn_context=context)
+    assert first.ok and first.data.decision == "approved"
+    replay = await client.call(ALICE, "issue_refund", args, turn_context=context)
+    assert replay == first
+    async with db.SessionLocal() as session:
+        assert await session.scalar(select(func.count()).select_from(Refund)) == 1
+
+
+async def test_mcp_consultation_cannot_execute_refund_even_when_model_requests_it(mcp_client):
+    client, _, _ = mcp_client
+    context = await turn_context("ORD-EX-1001 能退款吗，先查一下资格")
+    result = await client.call(ALICE, "issue_refund", {"order_id": "ORD-EX-1001"}, turn_context=context)
+    assert not result.ok and result.error.code == "ACTION_NOT_REQUESTED"
+    async with db.SessionLocal() as session:
+        assert await session.scalar(select(func.count()).select_from(Refund)) == 0
+
+
+async def test_mcp_turn_context_does_not_grant_access_to_another_customer(mcp_client):
+    client, _, _ = mcp_client
+    context = await turn_context("ORD-EX-1001 帮我退款")
+    result = await client.call(BOB, "issue_refund", {"order_id": "ORD-EX-1001"}, turn_context=context)
+    assert not result.ok and result.error.code == "ACTION_NOT_REQUESTED"
 
 
 async def test_agent_adapter_uses_injected_identity_and_structured_results(mcp_client):

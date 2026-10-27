@@ -331,11 +331,7 @@ async def test_chat_creation_starts_workflow_and_followup_only_reads(restart, mo
     runtime = await restart()
     chat.use_model(
         monkeypatch,
-        chat.intent("exchange", order="ORD-EX-1001", needs_order=True),
-        chat.ai(call=("get_order", {"order_id": "ORD-EX-1001"})),
-        chat.ai("订单已核实"),
-        chat.ai(call=("search_knowledge", {"query": "HP-01 左耳无声怎么换货"})),
-        chat.proposal(),
+        *chat.exchange_calls(),
     )
     events = await chat.turn("ORD-EX-1001 耳机左耳无声，我要换同型号")
     ticket_event = next(event for event in events if event["kind"] == "ticket_update")
@@ -344,14 +340,14 @@ async def test_chat_creation_starts_workflow_and_followup_only_reads(restart, mo
     assert any(
         event["kind"] == "workflow_status" and event["state"] == "interrupted" for event in events
     )
-    assert "本轮仅记录申请" in chat.final(events)
+    assert "等待人工审批" in chat.final(events)
     before = await snapshot(runtime, ticket_id)
 
     async def must_not_resume(*args):
         raise AssertionError("read-only followup must not resume workflow")
 
     monkeypatch.setattr(resume, "coordinate", must_not_resume)
-    chat.use_model(monkeypatch, chat.intent("ticket_followup", ticket=ticket_id))
+    chat.use_model(monkeypatch, chat.ai(call=("get_tickets", {"ticket_id": ticket_id})), chat.ai("查询完成。"))
     followup = await chat.turn(f"查询 {ticket_id} 的进度")  # a new conversation
     assert ticket_id in chat.final(followup)
     assert (await snapshot(runtime, ticket_id)).config == before.config

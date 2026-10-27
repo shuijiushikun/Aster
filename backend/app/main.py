@@ -37,7 +37,7 @@ from app.auth import (
 from app.config import get_settings
 from app.db import session as db
 from app.db.models import Conversation, Customer, Message, Order, ReasoningEvent, Refund
-from app.db.seed import seed_if_empty
+from app.db.seed import demo_data, seed_if_empty
 from app.demo import order_out
 from app.demo import router as demo_router
 from app.events import broadcaster
@@ -207,7 +207,9 @@ async def dev_customers() -> list[dict]:
     if settings.auth_mode != "dev" or settings.env == "prod":
         raise HTTPException(status_code=404, detail="未找到请求的数据。")
     async with db.SessionLocal() as session:
-        rows = (await session.scalars(select(Customer).order_by(Customer.id).limit(20))).all()
+        demo_ids = [row["id"] for row in demo_data()["customers"]]
+        rows = (await session.scalars(select(Customer).where(Customer.id.in_(demo_ids))
+                                     .order_by(Customer.id))).all()
     return [{"id": c.id, "name": c.name, "email": c.email} for c in rows]
 
 
@@ -352,7 +354,7 @@ async def my_conversations(
     limit: int = Query(20, ge=1, le=100),
     before: datetime | None = None,
 ) -> list[ConversationSummary]:
-    return await _conversation_summaries(limit, before, customer_id=principal.sub)
+    return await _conversation_summaries(limit, before, customer_id=principal.sub, nonempty=True)
 
 
 @app.get("/api/me/conversations/{conversation_id}", response_model=ConversationDetail)
@@ -371,12 +373,19 @@ async def my_conversation(
                 .order_by(Message.id)
             )
         ).all()
+        events = (await session.scalars(
+            select(ReasoningEvent).where(ReasoningEvent.conversation_id == conversation_id,
+                                        ReasoningEvent.step_type != "trace")
+            .order_by(ReasoningEvent.seq)
+        )).all()
     return ConversationDetail(
         id=convo.id,
         customer_id=convo.customer_id,
         customer_name=None,
         messages=_messages_out(messages),
-        events=[],
+        events=[ReasoningEventOut(id=e.id, message_id=e.message_id, seq=e.seq,
+                    step_type=e.step_type, node=e.node, payload=e.payload, created_at=e.created_at)
+                for e in events],
     )
 
 
@@ -401,7 +410,7 @@ async def my_orders(principal: Principal = Depends(require_customer)) -> list[Or
 
 
 async def _conversation_summaries(
-    limit: int, before: datetime | None, customer_id: str | None = None
+    limit: int, before: datetime | None, customer_id: str | None = None, *, nonempty=False
 ) -> list[ConversationSummary]:
     msg_count = (
         select(func.count(Message.id))
@@ -427,6 +436,8 @@ async def _conversation_summaries(
         stmt = stmt.where(Conversation.created_at < before)
     if customer_id is not None:
         stmt = stmt.where(Conversation.customer_id == customer_id)
+    if nonempty:
+        stmt = stmt.where(msg_count > 0)
     async with db.SessionLocal() as session:
         rows = (await session.execute(stmt)).all()
     return [

@@ -15,3 +15,11 @@ frontend/dist-cross-origin/
 dump.rdb
 .opik/
 backend/evals/results.json
+
+# 本地协作、学习与面试资料。
+/AGENTS.md
+/docs/
+/项目学习路线与进度.md
+/项目问题.txt
+/项目面试问答（练习版）.md
+/后端源码精读指南.md

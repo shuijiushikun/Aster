@@ -42,6 +42,9 @@ def _prepare_env(mode: str, db_dir: str) -> None:
     os.environ["DATABASE_URL"] = f"sqlite:///{db_dir}/evals.db"
     os.environ["REDIS_URL"] = ""  # in-process fakeredis
     os.environ["SEED_ON_STARTUP"] = "false"
+    # 此回归集验证基础退款工具；统一售后图由聊天图和 MCP 集成测试覆盖。
+    os.environ["AGENT_V2_ENABLED"] = "false"
+    os.environ["INTENT_CLASSIFIER_ENABLED"] = "false"
     os.environ.setdefault("LOG_LEVEL", "WARNING")
     os.environ["LLM_FALLBACK_PROVIDER"] = ""  # measure the primary model only
     if mode == "scripted":

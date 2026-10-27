@@ -49,6 +49,8 @@ def reset_primary_breaker(monkeypatch):
     # Legacy tests stay independent of the developer's local rollout switch.
     # V2 tests explicitly enable the new graph in their own fixture.
     monkeypatch.setattr(get_settings(), "agent_v2_enabled", False)
+    # 普通回归与本机 Ollama 隔离；分类集成用例单独开启并注入模型响应。
+    monkeypatch.setattr(get_settings(), "intent_classifier_enabled", False)
     graph.breaker.open_until = 0.0
     yield
     graph.breaker.open_until = 0.0
@@ -102,3 +104,46 @@ def admin_auth() -> dict:
 
 def tools_by_name(tool_list) -> dict:
     return {t.name: t for t in tool_list}
+
+
+@pytest.fixture
+def mcp_settings():
+    from app.config import Settings
+    return Settings(
+        _env_file=None,
+        commerce_mcp_service_secret="test-mcp-secret-which-is-at-least-32-chars",
+        commerce_mcp_url="http://127.0.0.1:8001/mcp",
+        commerce_mcp_timeout_s=2,
+        commerce_mcp_max_retries=0,
+    )
+
+
+@pytest.fixture
+async def mcp_client(engine, mcp_settings):
+    import asyncio
+
+    from app.commerce_mcp.server import create_app
+    from app.mcp.client import CommerceClient
+    from tests.seed_data import seed_exchange_samples
+    await seed_exchange_samples()
+    app = create_app(mcp_settings)
+
+    def factory(**kwargs):
+        return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), **kwargs)
+
+    # pytest-asyncio 的 yield fixture 在不同 task 中收尾；SDK 的 AnyIO cancel scope
+    # 必须在进入它的同一 task 退出，所以让应用 lifespan 拥有独立、完整的 task。
+    started, stopped = asyncio.Event(), asyncio.Event()
+
+    async def lifespan():
+        async with app.router.lifespan_context(app):
+            started.set()
+            await stopped.wait()
+
+    task = asyncio.create_task(lifespan())
+    try:
+        await asyncio.wait_for(started.wait(), timeout=5)
+        yield CommerceClient(mcp_settings, http_client_factory=factory), app, factory
+    finally:
+        stopped.set()
+        await task

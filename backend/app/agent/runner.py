@@ -44,7 +44,7 @@ from app import redis as shared
 from app import tracing
 from app.agent.graph import get_agent
 from app.agent.llm import primary_model_name, use_prompt_caching
-from app.agent.prompts import get_system_prompt
+from app.agent.prompts import get_after_sales_prompt, get_system_prompt
 from app.agent.runtime import ModelCalls, TurnRuntime
 from app.agent.streaming import GraphEvents, message_text
 from app.agent.tools import ToolContext, tool_config
@@ -129,6 +129,8 @@ _ZH_REPEAT_REFUND_SUFFIX = re.compile(
     r"^[，,；;。\s]*(?:不能|无法|不可|不允许)(?:再次|重复)(?:办理|退款)"
 )
 _ZH_CONDITIONAL_SUFFIX = re.compile(r"^(?:后|之后|以后|时|的话|才能|才会)")
+_ZH_REFUNDED_ORDER_RULE = re.compile(r"^(?:的)?订单(?:不能|无法|不可|不允许)(?:再次|重复)(?:办理|退款)")
+_ZH_EXCHANGE_RULE = re.compile(r"^会(?:终止|取消)活跃的?换货申请")
 
 
 def claims_approval(text: str) -> bool:
@@ -144,6 +146,10 @@ def claims_approval(text: str) -> bool:
         prefix = plain[max(0, match.start() - 50):match.start()]
         suffix = plain[match.end():]
         if _ZH_NONASSERTIVE_PREFIX.search(prefix) or _ZH_CONDITIONAL_SUFFIX.search(suffix):
+            continue
+        # “已退款订单不能再退”和“退款成功会终止换货”描述规则，不宣称本轮办理结果。
+        if ((match.group() in {"已退款", "已经退款"} and _ZH_REFUNDED_ORDER_RULE.search(suffix))
+                or (match.group() == "退款成功" and _ZH_EXCHANGE_RULE.search(suffix))):
             continue
         # 仅排除“订单已退款＋不能再退”这种状态说明；
         # “订单已为您办理退款”含有办理动作，即使后面提醒勿重复申请，也必须核对本轮结果。
@@ -204,8 +210,8 @@ async def _history(conversation_id: str) -> list:
     return await load_context(customer_id, conversation_id)
 
 
-def _system_message() -> SystemMessage:
-    prompt = get_system_prompt()
+def _system_message(unified: bool = False) -> SystemMessage:
+    prompt = get_after_sales_prompt() if unified else get_system_prompt()
     if use_prompt_caching():
         # 仅在供应商支持时标记稳定的提示词前缀供其缓存；这与数据库保存聊天记录不同。
         return SystemMessage(
@@ -359,7 +365,7 @@ async def run_agent_turn(
         return
 
     # 已验证的身份通过执行配置传给工具，不能由模型在工具参数中随意指定客户。
-    ctx = ToolContext(conversation_id=cid, verified_customer_id=customer_id)
+    ctx = ToolContext(conversation_id=cid, verified_customer_id=customer_id, message_id=user_msg_id)
     agent = get_agent(scripted=scripted)
     runtime = TurnRuntime()
     v2 = settings.agent_v2_enabled and not scripted
@@ -386,7 +392,7 @@ async def run_agent_turn(
             usage = runtime.usage.pop(0)
             node = usage.pop("node")
             model = usage["model"]
-            if model and not scripted and not model.startswith(primary_model):
+            if node != "intent" and model and not scripted and not model.startswith(primary_model):
                 fallback_in_turn = True
                 LLM_FALLBACKS.labels(model).inc()
             if scripted:
@@ -406,7 +412,7 @@ async def run_agent_turn(
         async with asyncio.timeout(settings.turn_timeout_s):
             # The saved current user message appears exactly once in owned context.
             messages = await _history(cid)
-            messages[0] = _system_message()
+            messages[0] = _system_message(unified=v2)
             # updates 按节点输出消息更新，不是逐个字的流；一次问答可能经过多个模型/工具节点。
             async for chunk in agent.astream(
                 {"messages": messages},
@@ -443,7 +449,8 @@ async def run_agent_turn(
                                 result = {"raw": str(msg.content)}
                             # 只有实际退款工具返回 approved 才算成功；不能把资格检查当作退款。
                             if msg.name in _DECISION_TOOLS and isinstance(result, dict):
-                                decision = result.get("decision")
+                                decision_data = result.get("data") if result.get("ok") else result
+                                decision = (decision_data or {}).get("decision")
                                 if decision:
                                     REFUND_DECISIONS.labels(decision).inc()
                                     decision_in_turn = decision

@@ -1,54 +1,35 @@
-"""Short-lived T4 chat graph. Approval/checkpoint workflows belong to T5."""
+"""一个售后 Agent 与 MCP 工具循环；审批和恢复仍由持久化工作流负责。"""
 
 import json
 import re
-from typing import TypedDict
+from typing import Annotated, TypedDict
 
-from langchain_core.messages import SystemMessage, ToolMessage
-from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import tool
+from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, StateGraph
+from langgraph.graph.message import add_messages
+from langgraph.types import Overwrite
 from pydantic import ValidationError
 
-from app.after_sales.schemas import EvidenceRef, ExchangeInput
-from app.after_sales.service import TicketError, TicketService
-from app.agent.context import (
-    ContextBudgetExceeded,
-    assemble,
-    context_data,
-    current_text,
-    grounded_id,
-    identifiers,
-)
-from app.agent.contracts import ExchangeProposal, IntentDecision
-from app.agent.prompts import get_system_prompt
+from app.after_sales.intent import TurnIntent, classify_intent, requested_actions
+from app.agent.context import assemble, context_data, current_text, grounded_id, identifiers
+from app.agent.prompts import get_after_sales_prompt
 from app.agent.runtime import ModelCalls
-from app.agent.specialists import compile_specialist
 from app.agent.streaming import message_text
 from app.agent.tools import _ctx
-from app.auth import Principal
 from app.config import get_settings
-from app.db import session as db
-from app.db.models import Order, Product
-from app.mcp.schemas import RESULT_TYPES
-from app.mcp.tools import build_commerce_tools
-from app.rag.schemas import RetrievalResult
+from app.mcp.schemas import WRITE_TOOLS, failure
+from app.mcp.tools import build_after_sales_tools
 
 
 class ChatState(TypedDict, total=False):
-    messages: list
-    intent: dict
+    messages: Annotated[list, add_messages]
+    tool_count: int
     order_facts: dict
     knowledge_evidence: dict
-    proposal: dict
     ticket_result: dict
-    final_response: str
-    safe_response: str
-    order_messages: list
-    knowledge_messages: list
-    router_messages: list
-    proposal_messages: list
     workflow_result: dict
+    final_response: str
+    turn_intent: dict
 
 
 _STATUSES = {
@@ -68,435 +49,171 @@ def ticket_reply(ticket):
     status = _STATUSES.get(ticket["status"], "请联系人工客服核实状态")
     if ticket["status"] == "COMPLETED" and not ticket.get("reference_code"):
         status = "工单记录为完成，受理凭证尚待核实"
-    return f"工单 {ticket['id']}（订单 {ticket['order_id']}）的当前状态：{status}。"
+    next_step = {
+        "OPEN": "换货申请已保存，接下来需要核验申请材料。您可以在右侧“我的工单”查看进度；如果状态暂未更新，请刷新工单。",
+        "WAITING_INFO": "申请已保存，还需要补齐材料。请在右侧“我的工单”中打开这笔申请，补充具体问题、换货原因和希望更换的型号或尺码，再提交材料。",
+        "PENDING_REVIEW": "申请材料已进入人工审核，暂时无需重复提交。审核结果会显示在“我的工单”中；审批前如需撤回，可以在工单里取消申请。",
+        "APPROVED": "管理员已批准这次申请，系统还需要完成最后的受理处理。请稍后刷新工单；如果一直停留在这里，可请管理员继续办理。",
+        "FAILED_RETRYABLE": "申请和已提交的材料仍然保留，暂时遇到处理异常。请联系管理员点击“重试办理”，继续原有申请，无需重新建单。",
+        "FAILED_TERMINAL": "这笔申请遇到了需要人工处理的问题，自动重试已停止。请联系管理员查看工单中的异常说明，确认后续处理方式。",
+        "REJECTED": "这笔申请已经结束。您可以打开“我的工单”查看审批意见和处理记录，了解拒绝原因。",
+        "CANCELLED": "这笔申请已取消，后续不会继续受理。如果仍希望换货，可以重新说明需求，系统会按新的申请时间核验条件。",
+    }.get(ticket["status"], "请打开“我的工单”核对详细记录。")
+    if ticket["status"] == "COMPLETED":
+        next_step = (f"模拟受理单号：{ticket['reference_code']}。这次申请已处理结束，您可以在“我的工单”保留并查看记录。当前演示只生成受理记录，不安排实际发货。"
+                     if ticket.get("reference_code") else "工单显示已完成，但暂未查到受理凭证。请先刷新工单或联系管理员核实，我目前无法确认受理结果。")
+    return f"订单 **{ticket['order_id']}** 的换货进度是：**{status}**。\n\n{next_step}\n\n工单编号：{ticket['id']}。"
 
 
-async def retrieve_knowledge(query, *, model_code=None, category=None):
-    from app.rag.retriever import KnowledgeRetriever
-    from app.rag.store import open_store
-
-    try:
-        async with open_store(get_settings()) as (store, client):
-            return await KnowledgeRetriever(store, client).retrieve(
-                query, model_code=model_code, category=category
-            )
-    except Exception:
-        return RetrievalResult(
-            query=query, model_code=model_code, status="unavailable", reason="service_unavailable"
-        )
-
-
-async def structured(caller, schema, messages, config, node):
-    messages = list(messages)
-    messages[0] = SystemMessage(
-        str(messages[0].content)
-        + "\n只返回一个符合以下 JSON Schema 的 JSON 对象，不要 Markdown，不要额外字段：\n"
-        + json.dumps(schema.model_json_schema(), ensure_ascii=False)
-    )
-    raw = await caller.call(messages, config, node=node, json_mode=True)
-    # There is no unbounded repair loop. Bad output goes to a safe clarification.
-    return schema.model_validate_json(message_text(raw)), raw
-
-
-def _tool_results(messages):
-    for message in messages:
-        if isinstance(message, ToolMessage) and message.name in RESULT_TYPES:
-            try:
-                yield message.name, RESULT_TYPES[message.name].model_validate_json(message.content)
-            except (ValidationError, ValueError):
-                continue
+def scope_error(messages, name, arguments, actions=None):
+    if actions is None:
+        actions = requested_actions(current_text(messages))
+    order_id = arguments.get("order_id")
+    if order_id and grounded_id(messages, order_id, "ORD") is None:
+        return "请明确本次要查询或办理的唯一订单号。"
+    if name == "search_knowledge":
+        if arguments.get("overview") and actions:
+            return "办理申请需要针对性检索，请使用 overview=false。"
+        order = identifiers(messages, "ORD") or context_data(messages).get("facts", {}).get("resolved_order_id")
+        if order and not order_id:
+            return "本次咨询包含订单号，请按该订单核实商品后检索。"
+        code = arguments.get("model_code")
+        catalog = context_data(messages).get("facts", {}).get("catalog_products", [])
+        verified_code = any(p.get("model_code") == code for p in catalog)
+        if code and not verified_code and grounded_id(messages, code, code.split("-")[0]) is None:
+            return "请提供明确的商品型号，或使用订单号核实商品。"
+        # 明确给了型号时，不允许模型省略范围而取通用资料冒充型号答案。
+        explicit = re.findall(r"\b[A-Za-z][A-Za-z0-9]*-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*", current_text(messages))
+        models = {value.casefold() for value in explicit if not value.upper().startswith(("ORD-", "TKT-"))}
+        if code and models and code.casefold() not in models:
+            return "请按客户本次指定的商品型号检索，不要替换成其他型号。"
+        if explicit and not order_id and not code:
+            return "请先核实消息中的订单或商品型号，再按对应范围检索。"
+    return None
 
 
 def compile_chat_graph(model, fallback=None):
     caller = ModelCalls(model, fallback)
+    all_tools = {t.name: t for t in build_after_sales_tools()}
 
-    async def load_context(state: ChatState):
-        return {"order_facts": {}, "knowledge_evidence": {}, "ticket_result": {}, "proposal": {}}
+    def allowed(intent):
+        actions = intent.actions
+        writes = set()
+        if "refund" in actions:
+            writes.update(("issue_refund", "escalate_to_human"))
+        if "exchange" in actions:
+            writes.add("create_exchange_request")
+        return {n: t for n, t in all_tools.items() if n not in WRITE_TOOLS or n in writes}
 
-    async def intent_router(state: ChatState, config: RunnableConfig):
-        instruction = (
-            "识别客户当前请求。退款=refund；明确申请换货=exchange；只问政策、说明、故障排查=knowledge；"
-            "只查订单=order；查询已有换货工单进度=ticket_followup；其他=other。"
-            "咨询换货政策不代表申请换货。承接上文时结合客户最近消息，不能因为历史申请自动再次建单。"
-            "需要查询具体订单/明确型号知识时 needs_order=true；通用知识为 false。"
-            "exchange 必须 needs_order/needs_knowledge=true。不能虚构 ID。"
-        )
-        try:
-            decision, raw = await structured(
-                caller,
-                IntentDecision,
-                assemble(state["messages"], instruction),
-                config,
-                "intent_router",
-            )
-            return {"intent": decision.model_dump(), "router_messages": [raw]}
-        except ContextBudgetExceeded:
-            raise
-        except Exception:
-            # Keep infrastructure details out of the customer response.
-            return {
-                "intent": {"intent": "other"},
-                "safe_response": "暂时无法准确理解该请求。请说明要查询订单、咨询政策、申请退款还是换货。",
-            }
+    async def agent(state: ChatState, config):
+        messages = state["messages"]
+        if "tool_count" not in state:
+            # 只在首轮装配历史和摘要；后续保留完整的工具请求/响应配对。
+            messages = assemble(messages, get_after_sales_prompt())
+            intent = await classify_intent(messages, config)
+            messages.insert(1, SystemMessage(
+                f"本轮意图分类为 {intent.intent}。query 仅查询；refund/exchange 仅开放对应申请工具；"
+                "clarify 时先询问客户希望查询、退款还是换货。仍需核对订单及业务条件。"))
+        else:
+            intent = TurnIntent.model_validate(state["turn_intent"])
+        _ctx(config).turn_intent = intent
+        raw = await caller.call(messages, config, node="agent", tools=list(allowed(intent).values()))
+        return {"messages": Overwrite(messages + [raw]) if "tool_count" not in state else [raw],
+                "tool_count": state.get("tool_count", 0), "turn_intent": intent.model_dump()}
 
-    async def order_agent(state: ChatState, config: RunnableConfig):
-        decision = state["intent"]
-        order_id = grounded_id(state["messages"], decision.get("order_id"), "ORD")
-        explicit_ids = identifiers(state["messages"], "ORD")
-        if len(explicit_ids) > 1 or (decision["intent"] == "exchange" and not order_id):
-            return {"safe_response": "请提供这次要处理的唯一订单号，以便核实订单和商品型号。"}
-        # Product codes are candidates only; get_product must verify them first.
-        codes = (
-            set(
-                re.findall(
-                    r"(?<![A-Za-z0-9_-])[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+(?![A-Za-z0-9_-])",
-                    current_text(state["messages"]),
-                )
-            )
-            - explicit_ids
-        )
+    async def tools(state: ChatState, config):
+        messages, count = [], state["tool_count"]
+        updates = {}
+        intent = TurnIntent.model_validate(state["turn_intent"])
+        available = allowed(intent)
+        for call in state["messages"][-1].tool_calls:
+            name, args = call["name"], call.get("args", {})
+            error = scope_error(state["messages"], name, args, intent.actions)
+            if count >= get_settings().agent_max_tool_calls:
+                result = failure("INVALID_ARGUMENT", "本轮已达到工具调用上限，请根据已有结果回复。")
+                content = result.model_dump_json()
+            elif name not in available or error:
+                content = failure("INVALID_ARGUMENT", error or "当前请求不允许此操作。").model_dump_json()
+                count += 1
+            else:
+                count += 1
+                try:
+                    content = await available[name].ainvoke(args, config=config)
+                except (ValidationError, ValueError, TypeError):
+                    content = failure("INVALID_ARGUMENT", "工具参数无效，请补充明确信息。").model_dump_json()
+            data = json.loads(content)
+            messages.append(ToolMessage(content=content, name=name, tool_call_id=call["id"]))
+            if data.get("ok"):
+                facts = data["data"]
+                if name == "get_order":
+                    updates["order_facts"] = facts
+                elif name == "search_knowledge":
+                    updates["knowledge_evidence"] = facts
+                elif name == "create_exchange_request":
+                    updates["ticket_result"] = facts
+                    updates["workflow_result"] = _ctx(config).workflow_result
+                elif name == "get_tickets" and len(facts.get("tickets", [])) == 1:
+                    updates["ticket_result"] = facts["tickets"][0]
+        return {"messages": messages, "tool_count": count, **updates}
 
-        def allowed(name, args):
-            if name in ("get_order", "get_exchange_policy_facts"):
-                return order_id is not None and args.get("order_id") == order_id
-            if name == "get_product":
-                return args.get("model_code") in codes
-            return name == "list_my_orders"
-
-        specialist = compile_specialist(
-            caller, build_commerce_tools(), "order_agent", allowed=allowed
-        )
-        prompt = (
-            "你是订单只读查询代理，只能调用商城 MCP 工具，不能退款、建单、批准或承诺换货。"
-            "最多执行3个工具。存在确认订单号时必须 get_order；没有订单号且有型号时 get_product；"
-            "否则 list_my_orders。读取成功后停止，不要重复查询，不要猜订单号。工具失败就停止。"
-        )
-        result = await specialist.ainvoke(
-            {
-                "messages": assemble(
-                    state["messages"], prompt, order_id=order_id, model_candidates=sorted(codes)
-                ),
-                "calls": 0,
-            },
-            config=config,
-        )
-        facts = {"scope_required": bool(order_id or codes or decision.get("needs_order"))}
-        for name, outcome in _tool_results(result["messages"]):
-            if not outcome.ok:
-                facts["error"] = outcome.error.code
-            elif name == "get_order" and outcome.data.order_id == order_id:
-                facts["order"] = outcome.data.model_dump(mode="json")
-            elif (
-                name == "get_product"
-                and outcome.data.model_code in codes
-                and outcome.data.is_active
-            ):
-                facts["product"] = outcome.data.model_dump(mode="json")
-            elif name == "list_my_orders":
-                facts["orders"] = outcome.data.model_dump(mode="json")["orders"]
-        if decision["intent"] == "exchange" and not facts.get("order"):
-            return {
-                "order_facts": facts,
-                "order_messages": result["messages"],
-                "safe_response": "暂时未能核实该订单的归属和商品信息，请确认订单号或稍后重试。",
-            }
-        return {"order_facts": facts, "order_messages": result["messages"]}
-
-    async def knowledge_agent(state: ChatState, config: RunnableConfig):
-        if state.get("safe_response"):
-            return {}
-        facts = state.get("order_facts", {})
-        scope = facts.get("order") or facts.get("product") or {}
-        if (state["intent"].get("needs_order") or facts.get("scope_required")) and not scope:
-            return {"safe_response": "请提供订单号或明确的商品型号，我需要核实型号后查询对应说明。"}
-        if scope and not scope.get("model_code"):
-            return {"safe_response": "该订单暂未关联可核实的商品型号，请补充型号或联系人工客服。"}
-        evidence = None
-
-        @tool
-        async def search_knowledge(query: str) -> str:
-            """检索售后知识。只提供自然语言问题；可信商品范围由后端固定，不能自行修改。"""
-            nonlocal evidence
-            # A specialist cannot use multiple tools to change the fixed scope or
-            # replace the original request with an unrelated query.
-            if evidence is None:
-                query = query.strip()[:2000] or current_text(state["messages"])
-                evidence = await retrieve_knowledge(
-                    query, model_code=scope.get("model_code"), category=scope.get("category")
-                )
-                evidence = evidence.model_copy(deep=True)
-                for source in evidence.sources:
-                    source.excerpt = source.excerpt[:get_settings().context_evidence_max_chars]
-            return evidence.model_dump_json()
-
-        specialist = compile_specialist(
-            caller, [search_knowledge], "knowledge_agent", finish_after_tools=True
-        )
-        prompt = "你是知识检索代理。必须调用一次 search_knowledge，以客户当前完整问题查询。不要自行回答或改变商品型号，不要写入业务数据。"
-        result = await specialist.ainvoke(
-            {"messages": assemble(state["messages"], prompt, scope=scope), "calls": 0},
-            config=config,
-        )
-        if evidence is None:
-            evidence = RetrievalResult(
-                query=current_text(state["messages"]),
-                model_code=scope.get("model_code"),
-                status="insufficient_evidence",
-                reason="no_search",
-            )
-        return {
-            "knowledge_evidence": evidence.model_dump(mode="json"),
-            "knowledge_messages": result["messages"],
-        }
-
-    async def gather_facts(state: ChatState):
-        if state.get("safe_response"):
-            return {}
-        if not state.get("order_facts", {}).get("order"):
-            return {"safe_response": "请先提供唯一且可核实的本人订单号。"}
-        if state.get("knowledge_evidence", {}).get("status") != "ok":
-            return {
-                "safe_response": "暂时没有检索到足够的对应商品资料，尚未提交换货申请。请补充故障或尺码问题，或联系人工客服。"
-            }
-        return {}
-
-    async def proposal(state: ChatState, config: RunnableConfig):
-        if state.get("safe_response"):
-            return {}
-        try:
-            value, raw = await structured(
-                caller,
-                ExchangeProposal,
-                assemble(
-                    state["messages"],
-                    "整理客户明确提出的换货诉求，不得编造原因或目标。未说明的 reason_type/目标留 null。"
-                    "只能引用本轮真实文档 ID。该提案不是审批结果，不能批准或受理换货。",
-                    order=state["order_facts"]["order"],
-                    evidence=state["knowledge_evidence"],
-                ),
-                config,
-                "proposal",
-            )
-            return {"proposal": value.model_dump(), "proposal_messages": [raw]}
-        except ContextBudgetExceeded:
-            raise
-        except Exception:
-            return {
-                "safe_response": "暂时未能整理出可靠的换货申请，请补充具体问题和希望更换的商品或尺码。"
-            }
-
-    async def policy_gate(state: ChatState, config: RunnableConfig):
-        if state.get("safe_response"):
-            return {}
-        ctx = _ctx(config)
-        value = ExchangeProposal.model_validate(state["proposal"])
-        order = state["order_facts"]["order"]
-        sources = state["knowledge_evidence"]["sources"]
-        actual_ids = {source["document_id"] for source in sources}
-        if (
-            value.order_id != order["order_id"]
-            or not value.evidence_document_ids
-            or not set(value.evidence_document_ids) <= actual_ids
-        ):
-            return {"safe_response": "申请中的订单或知识引用未通过核验，尚未提交，请重新描述诉求。"}
-        # Re-read the local authoritative product link; creation below rechecks
-        # ownership and policy under the existing per-order transaction lock.
-        async with db.SessionLocal() as session:
-            row = await session.get(Order, order["order_id"])
-            product = await session.get(Product, row.product_id) if row and row.product_id else None
-            if (
-                row is None
-                or row.customer_id != ctx.verified_customer_id
-                or product is None
-                or product.model_code != order["model_code"]
-                or product.category != order["category"]
-            ):
-                return {"safe_response": "订单或商品信息发生变化，尚未提交申请，请重新查询。"}
-        refs = [
-            EvidenceRef(
-                document_id=s["document_id"],
-                revision=s["revision"],
-                chunk_index=s["chunk_index"],
-                excerpt=s["excerpt"][:300],
-            )
-            for s in sources
-            if s["document_id"] in value.evidence_document_ids
-        ]
-        try:
-            ticket = await TicketService().create_or_find_exchange(
-                Principal(ctx.verified_customer_id, "customer"),
-                order["order_id"],
-                ExchangeInput(
-                    description=value.description,
-                    reason_type=value.reason_type,
-                    requested_change=value.requested_change,
-                    evidence_refs=refs,
-                ),
-                origin_conversation_id=ctx.conversation_id,
-                start_open=True,
-            )
-            from app.workflow.resume import coordinate
-
-            workflow_result = await coordinate(ticket.id)
-            detail = await TicketService().detail(
-                Principal(ctx.verified_customer_id, "customer"), ticket.id
-            )
-            return {
-                "ticket_result": {
-                    "id": ticket.id,
-                    "order_id": ticket.order_id,
-                    "status": detail.status,
-                    "reference_code": detail.reference_code,
-                },
-                "workflow_result": {"ticket_id": ticket.id, "state": workflow_result["state"]},
-            }
-        except TicketError as exc:
-            return {"safe_response": exc.message}
-
-    async def lookup_owned_ticket(state: ChatState, config: RunnableConfig):
-        principal = Principal(_ctx(config).verified_customer_id, "customer")
-        ticket_id = grounded_id(state["messages"], state["intent"].get("related_ticket_id"), "TKT")
-        if identifiers(state["messages"], "TKT") and not ticket_id:
-            return {"safe_response": "请确认这次要查询的唯一工单号。"}
-        try:
-            service = TicketService()
-            if ticket_id:
-                ticket = await service.detail(principal, ticket_id)
-                return {"safe_response": ticket_reply(ticket.model_dump())}
-            related = context_data(state["messages"]).get("facts", {}).get("related_tickets", [])
-            if len(related) > 1:
-                return {"safe_response": "您有多张相关工单，请提供这次要查询的唯一工单号。"}
-            if len(related) == 1:
-                ticket = await service.detail(principal, related[0]["id"])
-                return {"safe_response": ticket_reply(ticket.model_dump())}
-            tickets = await service.list_tickets(principal, limit=5)
-            return {
-                "safe_response": "\n".join(ticket_reply(t.model_dump()) for t in tickets)
-                if tickets
-                else "当前没有可查询的换货工单。"
-            }
-        except TicketError as exc:
-            return {"safe_response": exc.message}
-
-    async def legacy_refund_adapter(state: ChatState, config: RunnableConfig):
-        from app.agent.graph import _compile
-
-        history = [
-            message for message in state["messages"] if not isinstance(message, SystemMessage)
-        ]
-        result = await _compile(model, fallback).ainvoke(
-            {"messages": [SystemMessage(get_system_prompt()), *history]}, config=config
-        )
-        text = message_text(result["messages"][-1])
-        return {"safe_response": text, "order_messages": result["messages"]}
-
-    async def reply(state: ChatState, config: RunnableConfig):
-        if state.get("safe_response"):
-            return {"final_response": state["safe_response"]}
-        if state.get("ticket_result"):
-            return {
-                "final_response": ticket_reply(state["ticket_result"])
-                + " 本轮仅记录申请，不代表审批通过或换货受理成功。"
-            }
-        intent = state["intent"]["intent"]
-        if intent == "other":
-            return {
-                "final_response": "我可以协助查询 ACME 订单、售后知识、退款、换货申请与工单进度。请说明您需要哪项帮助。"
-            }
-        if intent == "knowledge" and state.get("knowledge_evidence", {}).get("status") != "ok":
-            return {
-                "final_response": "暂时没有足够的知识证据回答该问题。请补充商品型号或问题细节，或联系人工客服。"
-            }
-        if intent == "order" and not any(
-            state.get("order_facts", {}).get(key) for key in ("order", "orders", "product")
-        ):
-            if state.get("order_facts", {}).get("orders") == []:
-                return {"final_response": "您目前没有可查询的近期订单。"}
-            return {"final_response": "暂时无法查询该订单。请核对订单号或稍后重试。"}
-        raw = await caller.call(
-            assemble(
-                state["messages"],
-                "用简洁简体中文回答当前查询，只能使用已核实事实/检索证据。金额为 USD。"
-                "知识回答注明文档 ID。没有证据时明确说无法确认。你没有执行退款、提交申请、审批或受理，"
-                "不得声称这些动作已完成。不要展示 JSON、工具参数或内部错误码。",
-                order_facts=state.get("order_facts"),
-                evidence=state.get("knowledge_evidence"),
-            ),
-            config,
-            node="reply",
-        )
-        text = message_text(raw)
-        if claims_exchange_success(text):
-            text = "本轮仅查询信息，没有提交、批准或受理换货申请。请说明是否需要申请换货。"
-        return {"messages": [raw], "final_response": text}
-
-    def route(state):
-        intent = state["intent"]["intent"]
-        if intent == "refund":
-            return "legacy_refund_adapter"
-        if intent == "ticket_followup":
-            return "lookup_owned_ticket"
-        explicit_scope = bool(
-            identifiers(state["messages"], "ORD")
-            or re.search(r"\b[A-Za-z][A-Za-z0-9]*-[A-Za-z0-9]+", current_text(state["messages"]))
-        )
-        if intent in ("order", "exchange") or (
-            intent == "knowledge" and (state["intent"].get("needs_order") or explicit_scope)
-        ):
-            return "order_agent"
-        return "knowledge_agent" if intent == "knowledge" else "reply"
-
-    def after_order(state):
-        if state.get("safe_response"):
-            return "reply"
-        return (
-            "knowledge_agent" if state["intent"]["intent"] in ("exchange", "knowledge") else "reply"
-        )
+    async def finalize(state: ChatState):
+        last = state["messages"][-1]
+        text = message_text(last) if isinstance(last, AIMessage) and not last.tool_calls else ""
+        ticket = state.get("ticket_result")
+        # 工单回复使用实际状态与凭证，避免模型把提交、批准和完成混为一谈。
+        if ticket:
+            text = ticket_reply(ticket)
+        elif claims_exchange_success(text):
+            text = "尚未取得换货办理记录，请先查询工单或明确申请换货。"
+        if not text.strip() or (isinstance(last, AIMessage) and last.invalid_tool_calls):
+            text = "本轮处理已停止，请依据上方工具结果核实状态；需要继续时请补充订单号和具体诉求。"
+        evidence = state.get("knowledge_evidence", {})
+        if evidence.get("status") == "unavailable" and not ticket:
+            text = "这次知识检索服务暂时没有连通，我还没能读到对应资料，因此无法核实商品参数或排查建议。您提供的订单号可以保留，不用反复输入；稍后可以重试知识咨询，也可以继续查询订单或售后工单。"
+        elif evidence.get("status") == "insufficient_evidence" and not ticket:
+            # 普通知识问答保留针对当前问题的解释；办理申请仍明确告知证据不足。
+            if TurnIntent.model_validate(state["turn_intent"]).actions or not message_text(last).strip():
+                text = "本次检索没有找到足以核实这次问题的有效资料。您可以补充具体问题或商品型号，我再继续查找；目前没有据此提交新的换货申请。"
+        elif evidence.get("sources") and not ticket:
+            text += "\n参考资料：" + "、".join(dict.fromkeys(s["title"] for s in evidence["sources"]))
+        for message in reversed(state["messages"]):
+            if not isinstance(message, ToolMessage):
+                continue
+            result = json.loads(message.content)
+            if (result.get("error") or {}).get("code") == "OUTCOME_UNKNOWN":
+                text = "暂未取得办理结果，请查询订单或工单确认状态。"
+                break
+        return {"final_response": text}
 
     graph = StateGraph(ChatState)
-    for name, fn in (
-        ("load_context", load_context),
-        ("intent_router", intent_router),
-        ("order_agent", order_agent),
-        ("knowledge_agent", knowledge_agent),
-        ("gather_facts", gather_facts),
-        ("proposal", proposal),
-        ("policy_gate", policy_gate),
-        ("lookup_owned_ticket", lookup_owned_ticket),
-        ("legacy_refund_adapter", legacy_refund_adapter),
-        ("reply", reply),
-    ):
-        graph.add_node(name, fn)
-    graph.set_entry_point("load_context")
-    graph.add_edge("load_context", "intent_router")
-    graph.add_conditional_edges("intent_router", route)
-    graph.add_conditional_edges("order_agent", after_order)
-    graph.add_conditional_edges(
-        "knowledge_agent",
-        lambda state: "gather_facts" if state["intent"]["intent"] == "exchange" else "reply",
-    )
-    graph.add_edge("gather_facts", "proposal")
-    graph.add_edge("proposal", "policy_gate")
-    graph.add_edge("policy_gate", "reply")
-    graph.add_edge("lookup_owned_ticket", "reply")
-    graph.add_edge("legacy_refund_adapter", "reply")
-    graph.add_edge("reply", END)
+    graph.add_node("agent", agent)
+    graph.add_node("tools", tools)
+    graph.add_node("finalize", finalize)
+    graph.set_entry_point("agent")
+    graph.add_conditional_edges("agent", lambda s: "tools" if s["messages"][-1].tool_calls else "finalize")
+    graph.add_conditional_edges("tools", lambda s: "finalize" if s["tool_count"] >= get_settings().agent_max_tool_calls else "agent")
+    graph.add_edge("finalize", END)
     return graph.compile()
 
 
 def claims_exchange_success(text):
     # Query replies have no write result. Negated/conditional wording is allowed.
     for sentence in re.split(r"[。！？!?；;，,\n]", text):
+        sentence = re.sub(r"[*_`]", "", sentence)
         if re.search(
-            r"未|没有|不代表|不能|尚未|如果|若|审批后|\b(?:not|cannot|if|pending)\b",
+            r"未|没有|不代表|不能|不会|尚未|如果|若|审批后|\b(?:not|cannot|if|pending)\b",
             sentence,
             re.IGNORECASE,
         ):
             continue
-        if re.search(
+        for match in re.finditer(
             r"(?:换货|申请|工单).{0,16}(?:已提交|提交成功|已批准|已获批准|审批通过|批准成功|已受理|受理成功|已完成|完成换货)|(?:已|成功).{0,6}(?:为您|为你)?(?:提交|批准|受理|完成).{0,8}(?:换货|申请|工单)|\bexchange\b.{0,32}\b(?:approved|accepted|completed|submitted)\b",
             sentence,
             re.IGNORECASE,
         ):
+            prefix, suffix = sentence[:match.start()], sentence[match.end():]
+            if (re.search(r"(?:才能|才可|才算|只有|直到|一旦|假如|假设).{0,24}$", prefix)
+                    or re.match(r"(?:之前|之后|以前|以后|前|后|时|才能|才会)", suffix)):
+                continue
             return True
     return False

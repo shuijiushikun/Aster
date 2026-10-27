@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { devCustomers, devLogin, getToken, onTokenChange, setToken } from "../auth";
 import { friendlyError } from "../api";
 import { useToast } from "./Toaster";
+import { historyKey } from "../lib/chatHistory";
 
 type Customer = { id: string; name: string; email: string };
 
@@ -12,12 +13,13 @@ type Customer = { id: string; name: string; email: string };
 export default function DevIdentity() {
   const toast = useToast();
   const [customers, setCustomers] = useState<Customer[] | null>(null);
-  const [current, setCurrent] = useState<string>("");
+  const subject = () => historyKey(getToken("customer"))?.slice("acme.activeConversation.".length) ?? "";
+  const [current, setCurrent] = useState<string>(subject);
   const [, force] = useState(0);
 
   useEffect(() => {
     devCustomers().then(setCustomers);
-    return onTokenChange(() => force((n) => n + 1));
+    return onTokenChange(() => { setCurrent(subject()); force((n) => n + 1); });
   }, []);
 
   if (!customers) return null;
@@ -25,7 +27,7 @@ export default function DevIdentity() {
   const hasAdmin = Boolean(getToken("admin"));
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-warn/30 bg-warn/10 px-2 py-1 text-xs text-warn">
+    <div className="flex items-center gap-2 rounded-lg border border-warn/30 bg-warn/10 px-2 py-1 text-sm text-warn">
       <span className="font-semibold">开发</span>
       <select
         value={current}
@@ -39,7 +41,7 @@ export default function DevIdentity() {
             toast(friendlyError(err), "error");
           }
         }}
-        className="max-w-[8rem] rounded bg-surface px-1 py-0.5 text-fg sm:max-w-[10rem]"
+        className="min-h-10 max-w-[11rem] rounded-lg bg-surface px-3 py-2 text-sm text-fg sm:max-w-[17rem]"
         aria-label="选择演示客户"
       >
         <option value="">选择演示客户…</option>
@@ -58,9 +60,9 @@ export default function DevIdentity() {
             toast(friendlyError(err), "error");
           }
         }}
-        className="rounded bg-surface px-2 py-0.5 text-fg hover:bg-surface-2"
+        className="min-h-10 rounded-lg bg-surface px-3 py-2 text-sm text-fg hover:bg-surface-2"
       >
-        {hasAdmin ? "管理：开" : "管理：关"}
+        {hasAdmin ? "退出管理身份" : "开启管理身份"}
       </button>
     </div>
   );

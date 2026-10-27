@@ -13,6 +13,7 @@ from app.db import session as db
 from app.db.models import KnowledgeDocument
 from app.rag.corpus import OWNER, load_corpus
 from app.rag.embedding import make_embedding
+from app.rag.sparse import average_document_length
 from app.rag.store import (
     DENSE_VECTOR,
     MANIFEST_ID,
@@ -27,8 +28,10 @@ from app.rag.store import (
 async def index_knowledge(settings=None) -> dict:
     settings = settings or get_settings()
     documents, nodes, generation = load_corpus()
+    texts = [n.get_content(MetadataMode.NONE) for n in nodes]
+    average_length = average_document_length(texts)
     embedding = make_embedding(settings)
-    async with open_store(settings) as (store, client):
+    async with open_store(settings, bm25_average_length=average_length) as (store, client):
         exists = await client.collection_exists(settings.qdrant_collection)
         if exists:
             manifest = await read_manifest(client, settings)
@@ -37,6 +40,9 @@ async def index_knowledge(settings=None) -> dict:
             if (not isinstance(vectors, dict) or DENSE_VECTOR not in vectors
                     or vectors[DENSE_VECTOR].size != settings.embed_dimension):
                 raise ValueError("collection vector dimensions differ; use a new collection")
+            sparse = info.config.params.sparse_vectors or {}
+            if SPARSE_VECTOR not in sparse or sparse[SPARSE_VECTOR].modifier != models.Modifier.IDF:
+                raise ValueError("BM25 requires an IDF sparse index; use a new collection")
             active_filter = models.Filter(must=[condition("owner", OWNER), condition("record_type", "chunk"),
                                                 condition("index_generation", generation)])
             count = (await client.count(settings.qdrant_collection, count_filter=active_filter, exact=True)).count
@@ -44,14 +50,14 @@ async def index_knowledge(settings=None) -> dict:
                 return dict(status="unchanged", documents=len(documents), chunks=count, generation=generation)
 
         # 先完成全部向量化与维数校验，失败时不发布新目录。
-        vectors = await embedding.aget_text_embedding_batch([n.get_content(MetadataMode.NONE) for n in nodes])
+        vectors = await embedding.aget_text_embedding_batch(texts)
         for node, vector in zip(nodes, vectors, strict=True):
             node.embedding = vector
         if not exists:
             await client.create_collection(
                 settings.qdrant_collection,
                 vectors_config={DENSE_VECTOR: models.VectorParams(size=len(vectors[0]), distance=models.Distance.COSINE)},
-                sparse_vectors_config={SPARSE_VECTOR: models.SparseVectorParams()},
+                sparse_vectors_config={SPARSE_VECTOR: models.SparseVectorParams(modifier=models.Modifier.IDF)},
             )
             await client.upsert(settings.qdrant_collection, points=[models.PointStruct(
                 id=MANIFEST_ID, vector={}, payload={**identity(settings), "state": "building"})], wait=True)
@@ -84,6 +90,7 @@ async def index_knowledge(settings=None) -> dict:
                     for key, value in fields.items():
                         setattr(row, key, value)
         manifest = {**identity(settings), "state": "ready", "generation": generation,
+                    "bm25_average_length": average_length,
                     "documents": [d.model_dump() for d in documents], "chunks": len(nodes)}
         await client.upsert(settings.qdrant_collection, points=[models.PointStruct(
             id=MANIFEST_ID, vector={}, payload=manifest)], wait=True)

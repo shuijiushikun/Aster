@@ -1,7 +1,7 @@
 import type { Outcome, StepEvent } from "../types";
 
 // 表示无权访问订单的工具错误；故意将未知 ID 与他人订单作同样处理。
-const BLOCKING_ERRORS = new Set(["ownership_mismatch", "identity_not_verified", "order_not_found"]);
+const BLOCKING_ERRORS = new Set(["ownership_mismatch", "identity_not_verified", "order_not_found", "NOT_FOUND", "IDENTITY_NOT_VERIFIED"]);
 
 /** 汇总一轮智能体对话中确定性规则引擎的处理结果。 */
 export function outcomeOf(steps: StepEvent[]): Outcome | null {
@@ -9,12 +9,13 @@ export function outcomeOf(steps: StepEvent[]): Outcome | null {
   let evaluated: Outcome | null = null; // check_refund_eligibility 返回的资格判断。
   let blocked = false;
   for (const s of steps) {
-    const r = s.payload?.result;
+    const raw = s.payload?.result;
+    const r = raw?.ok === true ? raw.data : raw;
     if (s.step_type === "decision" && r?.decision) decided = r.decision as Outcome;
     else if (s.step_type === "policy_eval" && r?.decision) evaluated = r.decision as Outcome;
     // 规则拒绝将订单转人工；若后续存在实际决策，以实际决策为准。
     else if (s.step_type === "decision" && r?.error === "escalation_not_allowed") evaluated ??= "denied";
-    if (BLOCKING_ERRORS.has(r?.error)) blocked = true;
+    if (BLOCKING_ERRORS.has(typeof r?.error === "object" ? r.error.code : r?.error)) blocked = true;
   }
   if (decided) return decided;
   if (blocked) return "blocked";

@@ -6,6 +6,7 @@ import json
 
 from app.auth import Principal
 from app.mcp.client import CommerceClient, CommerceDependencyError
+from app.mcp.schemas import RESULT_TYPES, WRITE_TOOLS
 
 
 async def smoke(args) -> int:
@@ -14,13 +15,8 @@ async def smoke(args) -> int:
     cases = []
     try:
         tools = await client.list_tools(principal)
-        assert {tool.name for tool in tools} == {
-            "list_my_orders",
-            "get_order",
-            "get_product",
-            "get_exchange_policy_facts",
-        }
-        assert all(tool.annotations.readOnlyHint for tool in tools)
+        assert {tool.name for tool in tools} == set(RESULT_TYPES)
+        assert all(tool.annotations.readOnlyHint == (tool.name not in WRITE_TOOLS) for tool in tools)
         result = await client.call(principal, "list_my_orders", {"limit": 2})
         assert result.ok
         cases.append("list_my_orders")

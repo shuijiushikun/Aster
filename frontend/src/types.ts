@@ -1,6 +1,7 @@
 export interface StepEvent {
   kind: "step";
   id: number;
+  message_id?: number | null;
   seq: number;
   step_type:
     | "model"

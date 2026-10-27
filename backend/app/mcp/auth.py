@@ -7,6 +7,7 @@ from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from app.after_sales.intent import TurnIntent
 from app.auth import Principal
 from app.config import Settings
 
@@ -22,9 +23,15 @@ def service_secret(settings: Settings) -> str:
     return secret
 
 
-def mint_service_token(principal: Principal, settings: Settings) -> str:
+def mint_service_token(principal: Principal, settings: Settings, *,
+                       conversation_id: str | None = None, message_id: int | None = None,
+                       intent: dict | None = None) -> str:
     if principal.role != "customer" or not principal.sub.strip():
         raise ValueError("MCP reads require an authenticated customer")
+    if intent is not None:
+        if not conversation_id or type(message_id) is not int or message_id < 1:
+            raise ValueError("intent requires a persisted turn")
+        intent = TurnIntent.model_validate(intent).model_dump()
     now = int(time.time())
     return jwt.encode(
         {
@@ -33,6 +40,9 @@ def mint_service_token(principal: Principal, settings: Settings) -> str:
             "aud": AUDIENCE,
             "iat": now,
             "exp": now + TOKEN_TTL_S,
+            **({"conversation_id": conversation_id, "message_id": message_id}
+               if conversation_id is not None else {}),
+            **({"intent": intent} if intent is not None else {}),
         },
         service_secret(settings),
         algorithm="HS256",
@@ -65,6 +75,17 @@ class ServiceContextMiddleware:
                 raise jwt.InvalidTokenError()
             if claims["exp"] - claims["iat"] > TOKEN_TTL_S:
                 raise jwt.InvalidTokenError()
+            if "conversation_id" in claims and (
+                not isinstance(claims["conversation_id"], str)
+                or not 1 <= len(claims["conversation_id"]) <= 128
+                or type(claims.get("message_id")) is not int
+                or claims["message_id"] < 1
+            ):
+                raise jwt.InvalidTokenError()
+            if "intent" in claims:
+                if "conversation_id" not in claims:
+                    raise jwt.InvalidTokenError()
+                claims["intent"] = TurnIntent.model_validate(claims["intent"]).model_dump()
         except (jwt.PyJWTError, TypeError, ValueError):
             response = JSONResponse(
                 {"error": "IDENTITY_NOT_VERIFIED", "message": "商城服务身份无效或已过期。"},
@@ -74,4 +95,7 @@ class ServiceContextMiddleware:
             await response(scope, receive, send)
             return
         scope.setdefault("state", {})["commerce_customer_id"] = subject
+        scope["state"]["commerce_turn"] = {
+            key: claims[key] for key in ("conversation_id", "message_id", "intent") if key in claims
+        }
         await self.app(scope, receive, send)

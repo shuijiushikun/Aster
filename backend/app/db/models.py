@@ -31,6 +31,23 @@ class Base(DeclarativeBase):
     pass
 
 
+class AgentToolRequest(Base):
+    """与业务写入同事务保存的 MCP 请求结果。"""
+
+    __tablename__ = "agent_tool_requests"
+    __table_args__ = (
+        UniqueConstraint("customer_id", "operation", "request_id", name="uq_agent_tool_request"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    customer_id: Mapped[str] = mapped_column(ForeignKey("customers.id", ondelete="CASCADE"))
+    operation: Mapped[str] = mapped_column(String(64))
+    request_id: Mapped[str] = mapped_column(String(128))
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    response_json: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
+
+
 class Customer(Base):
     __tablename__ = "customers"
 

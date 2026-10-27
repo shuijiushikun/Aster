@@ -1,10 +1,12 @@
-"""商城 MCP 的输入/输出合同；不包含可执行审批或写订单的指令。"""
+"""售后 MCP 的结构化合同；客户工具不包含管理员审批和受理入口。"""
 
 from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.rag.schemas import RetrievalResult
 
 Identifier = Annotated[str, Field(min_length=1, max_length=128)]
 OrderLimit = Annotated[int, Field(ge=1, le=20)]
@@ -18,6 +20,11 @@ class CommerceError(BaseModel):
         "MCP_TIMEOUT",
         "MCP_UNAVAILABLE",
         "INVALID_RESPONSE",
+        "ACTION_NOT_REQUESTED",
+        "REQUEST_CONFLICT",
+        "EVIDENCE_REQUIRED",
+        "BUSINESS_REJECTED",
+        "OUTCOME_UNKNOWN",
     ]
     message: str
 
@@ -75,12 +82,62 @@ class ExchangeFacts(BaseModel):
     exchange_accepted: bool
 
 
+class CustomerProfile(BaseModel):
+    customer_id: Identifier
+    name: str
+    email: str
+    loyalty_tier: str
+
+
+class RefundEligibility(BaseModel):
+    order_id: Identifier
+    eligible: bool
+    requires_escalation: bool
+    reasons: list[str]
+    refund_amount: float
+    decision: Literal["approved", "denied", "escalated"]
+
+
+class RefundDecision(BaseModel):
+    order_id: Identifier
+    decision: Literal["approved", "denied", "escalated"]
+    refund_recorded: bool = False
+    amount: float = 0.0
+    reasons: list[str] = Field(default_factory=list)
+    already_escalated: bool = False
+    message: str = ""
+
+
+class KnowledgeSearch(RetrievalResult):
+    evidence_token: str | None = Field(default=None, max_length=16000)
+
+
+class TicketInfo(BaseModel):
+    id: Identifier
+    order_id: Identifier
+    status: str
+    reference_code: str | None = None
+
+
+class TicketPage(BaseModel):
+    tickets: list[TicketInfo] = Field(max_length=20)
+
+
 RESULT_TYPES = {
     "list_my_orders": ReadResult[OrderPage],
     "get_order": ReadResult[OrderInfo],
     "get_product": ReadResult[ProductInfo],
     "get_exchange_policy_facts": ReadResult[ExchangeFacts],
+    "get_my_profile": ReadResult[CustomerProfile],
+    "check_refund_eligibility": ReadResult[RefundEligibility],
+    "issue_refund": ReadResult[RefundDecision],
+    "escalate_to_human": ReadResult[RefundDecision],
+    "search_knowledge": ReadResult[KnowledgeSearch],
+    "create_exchange_request": ReadResult[TicketInfo],
+    "get_tickets": ReadResult[TicketPage],
 }
+
+WRITE_TOOLS = frozenset({"issue_refund", "escalate_to_human", "create_exchange_request"})
 
 
 def failure(code: str, message: str) -> ReadResult:

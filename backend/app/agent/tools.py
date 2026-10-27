@@ -20,17 +20,18 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 
+from app.after_sales.intent import TurnIntent
 from app.after_sales.locking import begin_order_write, lock_order
-from app.after_sales.refunds import evaluate_refund, reject_active_on_refund
+from app.after_sales.refund_service import ESCALATION_REASON_PREFIX as ESCALATION_REASON_PREFIX
+from app.after_sales.refund_service import RefundService
 from app.db import session as db
-from app.db.models import Customer, Order, Refund
+from app.db.models import Customer, Order
 from app.localization import product_name
 
 log = logging.getLogger(__name__)
@@ -43,9 +44,12 @@ class ToolContext:
     conversation_id: str
     verified_customer_id: str | None = None
     commerce_mcp_failed: bool = False
+    message_id: int | None = None
+    turn_intent: TurnIntent | None = None
+    evidence_tokens: dict[str, str] = field(default_factory=dict)
+    workflow_result: dict = field(default_factory=dict)
 
 
-ESCALATION_REASON_PREFIX = "[智能体整理的客户诉求；内容未经核实] "
 
 
 def _order_view(order: Order) -> dict:
@@ -165,153 +169,34 @@ def _build_tools() -> list:
     # 资格查询只返回判断结果，不写退款记录；即使 eligible=True，也不代表已经退款。
     @tool
     async def check_refund_eligibility(order_id: str, config: RunnableConfig) -> str:
-        """检查订单是否符合退款条件，此工具不会实际办理退款。
-
-        执行确定性退款规则，返回退款资格、是否需要转人工及相关原因。
-        在决定向客户如何答复前，应先调用此工具。
-        """
+        """查询本人订单退款资格，不写入退款记录。"""
         ctx = _ctx(config)
         guard = _require_identity(ctx)
         if guard:
             return guard
-        async with db.SessionLocal() as session:
-            order, err = await _get_owned_order(ctx, session, order_id)
-            if err:
-                return err
-            customer = await session.get(Customer, ctx.verified_customer_id)
-            result = await evaluate_refund(session, order, customer)
-        return json.dumps({"order_id": order_id, **result.to_dict()})
+        return json.dumps(await RefundService().check(ctx.verified_customer_id, order_id))
 
     @tool
     async def issue_refund(order_id: str, config: RunnableConfig) -> str:
-        """尝试为订单办理退款。
-
-        这是实际批准退款的唯一工具。此处会重新校验退款规则，只有规则允许时
-        才记录获批退款。清仓不可退、超出退款期限、已经退款或超过 500 美元的
-        申请会记录为拒绝或转人工，不能直接批准。
-        """
+        """复查退款规则并记录模拟退款结果。"""
         ctx = _ctx(config)
         guard = _require_identity(ctx)
         if guard:
             return guard
-
-        async with db.SessionLocal() as session:
-            # 持有订单行锁并重新校验规则：并发请求排队后会看到 refunded=True，避免重复退款。
-            order, err = await _get_owned_order(ctx, session, order_id, for_update=True)
-            if err:
-                return err
-            customer = await session.get(Customer, ctx.verified_customer_id)
-            result = await evaluate_refund(session, order, customer)
-            decision = result.decision  # approved：批准；denied：拒绝；escalated：转人工。
-            reasons = list(result.reasons)
-            amount = order.amount
-
-            # 本演示以数据库账本记录退款决定，此处没有调用银行或支付平台转账接口。
-            session.add(
-                Refund(
-                    order_id=order.id,
-                    amount=amount,
-                    decision=decision,
-                    reason=" ".join(reasons),
-                    decided_by="agent",
-                    conversation_id=ctx.conversation_id,
-                )
-            )
-            if decision == "approved":
-                order.refunded = True
-                await reject_active_on_refund(session, order.id)
-            try:
-                await session.commit()
-            except IntegrityError:
-                # 唯一索引作为最后防线：即使数据库不支持行锁，也只能记录一次成功退款。
-                await session.rollback()
-                decision = "denied"
-                reasons = [f"订单 {order_id} 已经退款，不能重复办理。"]
-                session.add(
-                    Refund(
-                        order_id=order_id,
-                        amount=amount,
-                        decision=decision,
-                        reason=reasons[0],
-                        decided_by="agent",
-                        conversation_id=ctx.conversation_id,
-                    )
-                )
-                await session.commit()
-
-        return json.dumps(
-            {
-                "order_id": order_id,
-                "decision": decision,
-                # 表示已记录本次决定；是否批准还需看 decision，拒绝/转人工也会记账。
-                "refund_recorded": True,
-                "amount": float(amount) if decision == "approved" else 0.0,
-                "reasons": reasons,
-            }
-        )
+        return json.dumps(await RefundService().execute(
+            ctx.verified_customer_id, order_id, ctx.conversation_id,
+        ))
 
     @tool
     async def escalate_to_human(order_id: str, reason: str, config: RunnableConfig) -> str:
-        """将退款申请转交人工专员审核。
-
-        仅适用于退款规则要求转人工的订单，即符合退款条件但超过自动批准金额上限。
-        其他情况均拒绝转人工：不符合退款条件的订单应拒绝退款，符合条件且未超过
-        上限的订单应调用 `issue_refund`。每笔订单至多转人工一次。
-        """
+        """仅将满足条件且超出自动批准金额的退款申请转人工。"""
         ctx = _ctx(config)
         guard = _require_identity(ctx)
         if guard:
             return guard
-        async with db.SessionLocal() as session:
-            # 与退款工具一样先锁住订单行，避免并发转人工时重复写入审核申请。
-            order, err = await _get_owned_order(ctx, session, order_id, for_update=True)
-            if err:
-                return err
-            customer = await session.get(Customer, ctx.verified_customer_id)
-            result = await evaluate_refund(session, order, customer)
-            if not (result.eligible and result.requires_escalation):
-                return json.dumps(
-                    {
-                        "error": "escalation_not_allowed",
-                        "order_id": order_id,
-                        "message": "该订单不符合转人工审核的条件。",
-                        "reasons": list(result.reasons),
-                    }
-                )
-            existing = await session.scalar(
-                select(Refund.decision)
-                .where(Refund.order_id == order.id, Refund.decision.in_(("escalated", "approved")))
-                .limit(1)
-            )
-            if existing is None:
-                # 转人工原因由模型根据客户陈述整理，标注未经核实，不能当作已确认事实。
-                summary = " ".join(reason.split())[:500]
-                session.add(
-                    Refund(
-                        order_id=order.id,
-                        amount=order.amount,
-                        decision="escalated",
-                        reason=ESCALATION_REASON_PREFIX + summary,
-                        decided_by="agent",
-                        conversation_id=ctx.conversation_id,
-                    )
-                )
-                await session.commit()
-        if existing is None:
-            message = "已转交人工专员审核。"
-        elif existing == "escalated":
-            # 明确说明本次没有重复提交，避免模型误报为新建了一次转人工申请。
-            message = "该申请已转交人工审核，本次没有重复提交。"
-        else:
-            message = "该订单的退款此前已批准。"
-        return json.dumps(
-            {
-                "order_id": order_id,
-                "decision": existing or "escalated",
-                "already_escalated": existing == "escalated",
-                "message": message,
-            }
-        )
+        return json.dumps(await RefundService().execute(
+            ctx.verified_customer_id, order_id, ctx.conversation_id, reason=reason,
+        ))
 
     return [
         get_my_profile,

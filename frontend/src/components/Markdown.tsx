@@ -53,7 +53,7 @@ export default function Markdown({ children }: { children: string }) {
             const isBlock = /language-/.test(className ?? "");
             if (isBlock) {
               return (
-                <code className="block overflow-x-auto rounded-md bg-surface-2 p-3 font-mono text-xs">
+                <code className="block overflow-x-auto rounded-md bg-surface-2 p-3 font-mono text-sm">
                   {children}
                 </code>
               );
@@ -73,7 +73,7 @@ export default function Markdown({ children }: { children: string }) {
           hr: () => <hr className="my-3 border-line" />,
           table: ({ children }) => (
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-xs">{children}</table>
+              <table className="w-full border-collapse text-sm">{children}</table>
             </div>
           ),
           th: ({ children }) => (
