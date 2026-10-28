@@ -26,6 +26,7 @@ export function outcomeOf(steps: StepEvent[]): Outcome | null {
 }
 
 export const OUTCOME_META: Record<Outcome, { label: string; tone: Tone }> = {
+  awaiting_confirmation: { label: "等待您确认", tone: "info" },
   approved: { label: "退款已批准", tone: "ok" },
   denied: { label: "退款已拒绝", tone: "bad" },
   escalated: { label: "已转人工审核", tone: "warn" },

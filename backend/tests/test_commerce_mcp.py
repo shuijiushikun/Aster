@@ -115,9 +115,18 @@ async def test_mcp_refund_replays_same_request_without_a_second_ledger_row(mcp_c
     context = await turn_context("ORD-EX-1001 帮我退款")
     args = {"order_id": "ORD-EX-1001"}
     first = await client.call(ALICE, "issue_refund", args, turn_context=context)
-    assert first.ok and first.data.decision == "approved"
+    assert first.ok and first.data.decision == "awaiting_confirmation"
     replay = await client.call(ALICE, "issue_refund", args, turn_context=context)
     assert replay == first
+    async with db.SessionLocal() as session:
+        assert await session.scalar(select(func.count()).select_from(Refund)) == 0
+    from app.after_sales.refund_confirmation import RefundConfirmationService
+
+    service = RefundConfirmationService()
+    cid, key = context["conversation_id"], first.data.confirmation.id
+    confirmed = await service.decide(ALICE.sub, cid, key, "confirm")
+    assert confirmed["result"]["decision"] == "approved"
+    assert await service.decide(ALICE.sub, cid, key, "confirm") == confirmed
     async with db.SessionLocal() as session:
         assert await session.scalar(select(func.count()).select_from(Refund)) == 1
 

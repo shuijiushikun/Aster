@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async
 
 from app.config import get_settings
 from app.db.models import Base
+from app.db.turns import TurnSession
 
 
 def make_engine(url: str | None = None) -> AsyncEngine:
@@ -46,14 +47,14 @@ def make_engine(url: str | None = None) -> AsyncEngine:
 
 
 engine: AsyncEngine = make_engine()
-SessionLocal = async_sessionmaker(engine, autoflush=False, expire_on_commit=False)
+SessionLocal = async_sessionmaker(engine, autoflush=False, expire_on_commit=False, sync_session_class=TurnSession)
 
 
 def configure(new_engine: AsyncEngine) -> None:
     """切换应用使用的数据库引擎，供测试和脚本调用。"""
     global engine, SessionLocal
     engine = new_engine
-    SessionLocal = async_sessionmaker(new_engine, autoflush=False, expire_on_commit=False)
+    SessionLocal = async_sessionmaker(new_engine, autoflush=False, expire_on_commit=False, sync_session_class=TurnSession)
 
 
 async def init_db() -> None:

@@ -101,6 +101,32 @@ class Refund(Base):
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
 
 
+class RefundConfirmation(Base):
+    __tablename__ = "refund_confirmations"
+    __table_args__ = (
+        UniqueConstraint("customer_id", "request_id", name="uq_refund_confirmation_request"),
+        CheckConstraint("status IN ('pending','confirmed','cancelled','expired','stale')",
+                        name="ck_refund_confirmation_status"),
+        Index("ix_refund_confirmation_conversation", "conversation_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    customer_id: Mapped[str] = mapped_column(ForeignKey("customers.id", ondelete="CASCADE"))
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"))
+    message_id: Mapped[int] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE"))
+    order_id: Mapped[str] = mapped_column(ForeignKey("orders.id"))
+    request_id: Mapped[str] = mapped_column(String(128))
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    operation: Mapped[str] = mapped_column(String(64))
+    reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    snapshot_json: Mapped[dict] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    result_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(TZDateTime())
+    decided_at: Mapped[datetime | None] = mapped_column(TZDateTime(), nullable=True)
+
+
 class Conversation(Base):
     __tablename__ = "conversations"
     __table_args__ = (

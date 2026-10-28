@@ -61,7 +61,7 @@ class BusinessStep(BaseModel):
     model_config = ConfigDict(extra="forbid")
     actor: Literal["customer_a", "customer_b", "admin", "system"]
     action: Literal["chat", "supplement_ticket", "decide_ticket", "cancel_ticket",
-                    "resume_ticket", "restart_worker", "replay_request"]
+                    "resume_ticket", "restart_worker", "replay_request", "confirm_refund"]
     input: str = Field(min_length=1)
     expected_tools: list[str] = Field(default_factory=list)
     forbidden_tools: list[str] = Field(default_factory=list)
@@ -90,7 +90,7 @@ class BusinessCase(Sample):
     @model_validator(mode="after")
     def target_requires_gap(self):
         if (self.suite == "target") != bool(self.known_gap):
-            raise ValueError("目标场景必须说明尚未实现的机制；当前场景不填写 known_gap")
+            raise ValueError("目标场景必须说明尚未覆盖的验证项；当前场景不填写 known_gap")
         return self
 
 

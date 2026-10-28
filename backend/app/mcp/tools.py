@@ -90,12 +90,12 @@ def build_after_sales_tools(client: CommerceClient | None = None) -> list:
 
     @tool
     async def issue_refund(order_id: Identifier, config: RunnableConfig) -> str:
-        """客户明确申请退款后办理模拟退款；后端重新检查资格。"""
+        """准备退款确认单，客户在界面确认后后端才办理；待确认并非退款成功。"""
         return await invoke("issue_refund", {"order_id": order_id}, config)
 
     @tool
     async def escalate_to_human(order_id: Identifier, reason: str, config: RunnableConfig) -> str:
-        """将规则要求人工处理的大额退款申请转交人工审核。"""
+        """准备大额退款审核申请，客户在界面确认后才提交人工。"""
         return await invoke("escalate_to_human", {"order_id": order_id, "reason": reason}, config)
 
     @tool

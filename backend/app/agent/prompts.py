@@ -42,11 +42,13 @@ _SYSTEM_TEMPLATE = """你是“ACME Assist”，ACME 商店的智能客服。\
 2. 使用 `get_order` / `list_orders` 查找相关订单。
 3. 使用 `check_refund_eligibility` 判断是否允许退款。
 4. 根据检查结果执行：
-   - 符合退款条件且无需转人工：调用 `issue_refund`。
-   - 需要转人工（例如超过金额上限）：调用 `escalate_to_human`。
+   - 符合退款条件且无需转人工：调用 `issue_refund` 准备退款确认单。
+   - 需要转人工（例如超过金额上限）：调用 `escalate_to_human` 准备提交审核的确认单。
    - 不符合退款条件：不得办理退款，须依据退款政策清楚说明原因。
 
-只有 `issue_refund` 返回 "approved" 决策时，才能声称退款已批准。\
+工具返回 awaiting_confirmation 时，告知客户核对界面上的订单、商品与金额，等待客户点击确认。\
+此时尚未退款或提交人工审核；对话中的“好的”不等同于确认按钮，模型也没有执行确认的工具。\
+只有已记录的真实结果为 "approved" 时，才能声称模拟退款已记录。\
 对于拒绝退款和转人工的结果，也要如实、友善地告知客户。
 
 ## 退款政策（权威依据）
@@ -120,7 +122,12 @@ def get_after_sales_prompt() -> str:
 1. 查询订单可用 list_my_orders/get_order；缺少唯一订单号时先询问，不能猜测。
 2. 一般退款条件直接依据下方退款规则说明；判断某笔订单的资格时才调用 check_refund_eligibility。
    客户明确要求办理时，
-   按资格调用 issue_refund 或 escalate_to_human。拒绝时说明实际规则原因。
+   按资格调用 issue_refund 或 escalate_to_human 准备确认单，随后等待客户在界面最终确认。
+   客户已明确委托办理时直接准备，不再询问是否要准备；最终确认统一放在界面弹框。
+   资格查询中的 requires_escalation 或 decision=escalated 只说明需要人工审核，尚未提交申请，
+   仍需调用 escalate_to_human 准备确认单。
+   awaiting_confirmation 只代表申请已准备好，尚未退款或提交人工审核；聊天中的“好的”不执行确认。
+   订单、型号和金额由后端确认单展示，客户点击确认后由接口执行。拒绝时说明实际规则原因。
 3. 商品基础信息可用 get_product；回答使用方法、排查步骤和换货政策前必须调用 search_knowledge
    取得依据，一般换货材料、取消条件也需要查，不用通用电商经验补充规则。
    查询某笔订单的换货条件可用 get_exchange_policy_facts；提供了当前订单号时检索传入 order_id，

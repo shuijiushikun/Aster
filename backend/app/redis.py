@@ -105,6 +105,10 @@ async def release_turn_lock(conversation_id: str, token: str) -> None:
     await get_redis().eval(_RELEASE_LOCK, 1, f"lock:conv:{conversation_id}", token)
 
 
+async def owns_turn_lock(conversation_id: str, token: str) -> bool:
+    return await get_redis().get(f"lock:conv:{conversation_id}") == token
+
+
 async def acquire_workflow_lock(ticket_id: str, ttl_s: float) -> str | None:
     token = uuid.uuid4().hex
     ok = await get_redis().set(f"workflow:{ticket_id}", token, nx=True, px=int(ttl_s * 1000))

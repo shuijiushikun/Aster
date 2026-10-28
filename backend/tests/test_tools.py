@@ -4,9 +4,11 @@ import json
 import pytest
 from sqlalchemy import select
 
+from app.after_sales.refund_confirmation import RefundConfirmationService
+from app.agent.runner import create_conversation
 from app.agent.tools import TOOLS, ToolContext, tool_config
 from app.db import session as db
-from app.db.models import Refund
+from app.db.models import Message, Refund
 from tests.conftest import TEST_DATABASE_URL, tools_by_name
 
 
@@ -15,7 +17,22 @@ def _ctx(customer_id=None) -> ToolContext:
 
 
 async def _call(ctx, name, **kwargs):
-    return json.loads(await tools_by_name(TOOLS)[name].ainvoke(kwargs, config=tool_config(ctx)))
+    # These policy tests include the customer's final button action. Raw tool
+    # preparation without consent is covered separately below and in MCP tests.
+    if name in {"issue_refund", "escalate_to_human"} and ctx.verified_customer_id:
+        ctx.conversation_id = await create_conversation(ctx.verified_customer_id)
+        async with db.SessionLocal() as session:
+            msg = Message(conversation_id=ctx.conversation_id, role="user",
+                          content=f"请办理退款 {kwargs['order_id']}")
+            session.add(msg)
+            await session.commit()
+            ctx.message_id = msg.id
+    result = json.loads(await tools_by_name(TOOLS)[name].ainvoke(kwargs, config=tool_config(ctx)))
+    if result.get("decision") == "awaiting_confirmation":
+        outcome = await RefundConfirmationService().decide(ctx.verified_customer_id,
+            ctx.conversation_id, result["confirmation"]["id"], "confirm")
+        return outcome["result"]
+    return result
 
 
 async def approved_refunds(order_id):

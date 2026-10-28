@@ -11,14 +11,17 @@ class TurnRuntime:
     usage: list[dict] = field(default_factory=list)
 
 
-async def invoke_model(model, messages, config: RunnableConfig, *, node: str):
+async def invoke_model(model, messages, config: RunnableConfig, *, node: str, tools=None):
     # Minimal scripted models predate RunnableConfig. Real LangChain models inherit
     # Runnable and receive callbacks/config so tracing also covers specialist calls.
     from langchain_core.runnables import Runnable
 
     from app.agent.context import fit_messages
 
-    messages = fit_messages(messages)
+    options = getattr(model, "kwargs", {})
+    options = options if isinstance(options, dict) else {}
+    messages = fit_messages(messages, tools=tools if tools is not None else options.get("tools"),
+                            response_format=options.get("response_format"))
     runtime = config.get("configurable", {}).get("turn_runtime")
     message = None
     try:
@@ -67,7 +70,7 @@ class ModelCalls:
 
         if self.fallback is None or not breaker.is_open():
             try:
-                return await invoke_model(bound(self.model), messages, config, node=node)
+                return await invoke_model(bound(self.model), messages, config, node=node, tools=tools)
             except Exception as exc:
                 from app.agent.context import ContextBudgetExceeded
 
@@ -76,4 +79,4 @@ class ModelCalls:
                 if self.fallback is None:
                     raise
                 breaker.trip(exc)
-        return await invoke_model(bound(self.fallback), messages, config, node=node)
+        return await invoke_model(bound(self.fallback), messages, config, node=node, tools=tools)

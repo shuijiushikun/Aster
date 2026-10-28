@@ -17,6 +17,13 @@ const { ApiError, friendlyError } = await load("src/api.ts");
 const { resumeLabel, ticketEventText } = await load("src/lib/tickets.ts");
 const { historyKey, restoreHistory } = await load("src/lib/chatHistory.ts");
 
+test("准备退款仅显示等待客户确认，不展示退款成功", () => {
+  const result = outcomeOf([{ step_type: "decision", payload: { result: { ok: true, data: { decision: "awaiting_confirmation" } } } }]);
+  assert.equal(result, "awaiting_confirmation");
+  assert.match(OUTCOME_META[result].label, /确认/);
+  assert.equal(OUTCOME_META[result].tone, "info");
+});
+
 test("终态和等待材料或审批时不提供恢复按钮，异常办理保留重试入口", () => {
   for (const status of ["COMPLETED", "CANCELLED", "REJECTED", "WAITING_INFO", "PENDING_REVIEW", "FAILED_TERMINAL"]) {
     assert.equal(resumeLabel(status), null);
@@ -67,7 +74,7 @@ test("金额显示保留美元含义与两位小数", () => {
 });
 
 test("内部工具名和状态值通过中文标签展示", () => {
-  assert.equal(locale.toolLabel("issue_refund"), "执行退款");
+  assert.equal(locale.toolLabel("issue_refund"), "申请退款");
   assert.equal(OUTCOME_META.approved.label, "退款已批准");
   assert.equal(locale.ERROR_LABELS.order_not_found, "未找到当前账户下的订单");
 });

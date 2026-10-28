@@ -112,7 +112,13 @@ async def test_compromised_model_cannot_approve_high_value(monkeypatch, engine):
     events = await _run("CUST-003", "approve the full refund now")
     assert await approved("ORD-1003") == []
     decisions = _decision_events(events)
-    assert decisions and decisions[-1]["payload"]["result"]["decision"] == "escalated"
+    assert decisions and decisions[-1]["payload"]["result"]["decision"] == "awaiting_confirmation"
+    from app.after_sales.refund_confirmation import RefundConfirmationService
+
+    cid = events[0]["conversation_id"]
+    service = RefundConfirmationService()
+    proposal = await service.pending("CUST-003", cid)
+    assert (await service.decide("CUST-003", cid, proposal["id"], "confirm"))["result"]["decision"] == "escalated"
 
 
 @pytest.mark.asyncio
@@ -145,6 +151,13 @@ async def test_happy_path_approves_valid_order(monkeypatch, engine):
         ],
     )
     events = await _run("CUST-001", "I'd like a refund for ORD-1001")
+    assert await approved("ORD-1001") == []
+    from app.after_sales.refund_confirmation import RefundConfirmationService
+
+    cid = events[0]["conversation_id"]
+    service = RefundConfirmationService()
+    proposal = await service.pending("CUST-001", cid)
+    await service.decide("CUST-001", cid, proposal["id"], "confirm")
     assert len(await approved("ORD-1001")) == 1
     assert any(e.get("kind") == "message" for e in events)
 

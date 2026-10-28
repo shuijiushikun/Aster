@@ -30,12 +30,12 @@ def test_assembly_keeps_current_once_and_history_in_order_and_data_out_of_system
 def test_budget_drops_old_history_then_summary_then_evidence_and_preserves_core():
     messages = [HumanMessage("旧" * 900), AIMessage("答" * 900), HumanMessage("保留当前问题")]
     result = context.build_context(
-        messages, "安全规则", max_chars=900,
+        messages, "安全规则", max_tokens=2180,
         facts={"owner_customer_id": "CUST-1", "ticket": {"id": "TKT-1", "status": "PENDING_REVIEW"}},
         summaries=[{"summary_text": "摘要" * 600}],
         evidence={"sources": [{"document_id": "KB-1", "excerpt": "证据" * 600}]},
     )
-    assert context.context_chars(result) <= 900
+    assert context.context_tokens(result) <= 900
     text = "".join(str(m.content) for m in result)
     assert "CUST-1" in text and "PENDING_REVIEW" in text and "保留当前问题" in text
     assert "旧" * 10 not in text and "摘要" * 10 not in text and "KB-1" not in text
@@ -43,11 +43,11 @@ def test_budget_drops_old_history_then_summary_then_evidence_and_preserves_core(
 
 def test_mandatory_overflow_fails_and_tool_pairs_stay_ordered():
     with pytest.raises(context.ContextBudgetExceeded):
-        context.build_context([HumanMessage("当前" * 1000)], "规则", max_chars=100)
+        context.build_context([HumanMessage("当前" * 1000)], "规则", max_tokens=1380)
     request = AIMessage("", tool_calls=[{"name": "read", "args": {}, "id": "call"}])
     reply = ToolMessage("结果", tool_call_id="call")
     messages = [SystemMessage("规则"), HumanMessage("当前"), request, reply]
-    assert context.fit_messages(messages, max_chars=1000) == messages
+    assert context.fit_messages(messages, max_tokens=2280) == messages
 
 
 async def add_history(cid, count):
@@ -124,7 +124,7 @@ async def test_summary_failure_keeps_pointer_and_accounts_attempt(engine, monkey
 async def test_long_summary_prefix_advances_a_bounded_contiguous_batch(engine, monkeypatch):
     from app.agent.memory import maybe_summarize
 
-    monkeypatch.setattr(get_settings(), "context_max_chars", 1200)
+    monkeypatch.setattr(get_settings(), "context_max_tokens", 2480)
     cid = await create_conversation("CUST-001")
     await add_history(cid, 16)
     async with db.SessionLocal() as session:
@@ -217,16 +217,22 @@ async def test_summary_rechecks_global_budget_and_bounds_preparation(
                                                      "total_tokens": 12})
 
     calls = []
+    cancelled = asyncio.Event()
 
     async def slow_summary(*args, **kwargs):
         calls.append(True)
-        await asyncio.sleep(5)
+        try:
+            await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
         raise AssertionError("summary preparation must have timed out")
 
     settings = get_settings()
     monkeypatch.setattr(settings, "auth_mode", "demo")
     monkeypatch.setattr(settings, "demo_global_daily_token_budget", global_cap)
-    monkeypatch.setattr(settings, "summary_timeout_s", 0.03)
+    # 超时也覆盖数据库准备；给事务校验和任务调度留出余量。
+    monkeypatch.setattr(settings, "summary_timeout_s", 0.5)
     monkeypatch.setattr(graph, "get_chat_model", lambda: Model())
     monkeypatch.setattr(graph, "get_fallback_model", lambda: None)
     monkeypatch.setattr(memory, "maybe_summarize", slow_summary)
@@ -234,3 +240,4 @@ async def test_summary_rechecks_global_budget_and_bounds_preparation(
     events = [e async for e in run_agent_turn("CUST-001", cid, "继续")]
     assert events[-1] == {"kind": "done"}
     assert len(calls) == expected_calls
+    assert cancelled.is_set() == bool(expected_calls)

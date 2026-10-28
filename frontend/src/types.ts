@@ -74,7 +74,20 @@ export interface ChatMessage {
   error?: boolean;
 }
 
-export type Outcome = "approved" | "denied" | "escalated" | "blocked" | "flagged";
+export type Outcome = "approved" | "denied" | "escalated" | "blocked" | "flagged" | "awaiting_confirmation";
+
+export interface RefundConfirmation {
+  id: string;
+  conversation_id: string;
+  order_id: string;
+  product_name: string;
+  model_code: string | null;
+  amount: string;
+  currency: "USD";
+  operation: "issue_refund" | "escalate_to_human";
+  status: "pending" | "confirmed" | "cancelled" | "expired" | "stale";
+  expires_at: string;
+}
 
 export interface ConversationSummary {
   id: string;

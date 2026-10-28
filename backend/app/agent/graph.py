@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from typing import Annotated, TypedDict
@@ -91,13 +92,17 @@ def _compile(model, fallback):
     async def agent_node(state: AgentState, config: RunnableConfig) -> dict:
         messages = state["messages"]
         if secondary is None:
-            return {"messages": [await invoke_model(primary, messages, config, node="agent")]}
+            return {"messages": [await invoke_model(primary, messages, config, node="agent", tools=tools)]}
         if not breaker.is_open():
             try:
-                return {"messages": [await invoke_model(primary, messages, config, node="agent")]}
+                return {"messages": [await invoke_model(primary, messages, config, node="agent", tools=tools)]}
             except Exception as exc:  # 主模型异常时触发熔断；有备用模型才会进入此分支。
+                from app.agent.context import ContextBudgetExceeded
+
+                if isinstance(exc, ContextBudgetExceeded):
+                    raise
                 breaker.trip(exc)
-        return {"messages": [await invoke_model(secondary, messages, config, node="agent")]}
+        return {"messages": [await invoke_model(secondary, messages, config, node="agent", tools=tools)]}
 
     # 模型返回 tool_calls 就去执行工具；没有工具调用时结束本轮图执行。
     def should_continue(state: AgentState):
@@ -112,5 +117,16 @@ def _compile(model, fallback):
     graph.set_entry_point("agent")
     graph.add_conditional_edges("agent", should_continue, {"tools": "tools", END: END})
     # 工具结果以消息形式回到 agent，模型据此决定继续调用工具还是向客户回复。
-    graph.add_edge("tools", "agent")
+    def after_tools(state):
+        from langchain_core.messages import ToolMessage
+
+        for message in reversed(state["messages"]):
+            if not isinstance(message, ToolMessage):
+                break
+            data = json.loads(message.content)
+            if (data.get("data") or data).get("decision") == "awaiting_confirmation":
+                return END
+        return "agent"
+
+    graph.add_conditional_edges("tools", after_tools)
     return graph.compile()

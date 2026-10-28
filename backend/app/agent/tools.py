@@ -18,6 +18,7 @@ RunnableConfig（`tool_config(ctx)`）传入，LangChain 将其注入 `config` �
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
@@ -28,6 +29,7 @@ from sqlalchemy import select
 
 from app.after_sales.intent import TurnIntent
 from app.after_sales.locking import begin_order_write, lock_order
+from app.after_sales.refund_confirmation import ConfirmationError, RefundConfirmationService
 from app.after_sales.refund_service import ESCALATION_REASON_PREFIX as ESCALATION_REASON_PREFIX
 from app.after_sales.refund_service import RefundService
 from app.db import session as db
@@ -178,25 +180,32 @@ def _build_tools() -> list:
 
     @tool
     async def issue_refund(order_id: str, config: RunnableConfig) -> str:
-        """复查退款规则并记录模拟退款结果。"""
+        """准备退款确认单；客户在界面确认后才能记录模拟退款。"""
         ctx = _ctx(config)
         guard = _require_identity(ctx)
         if guard:
             return guard
-        return json.dumps(await RefundService().execute(
-            ctx.verified_customer_id, order_id, ctx.conversation_id,
-        ))
+        return await prepare_refund(ctx, order_id)
 
     @tool
     async def escalate_to_human(order_id: str, reason: str, config: RunnableConfig) -> str:
-        """仅将满足条件且超出自动批准金额的退款申请转人工。"""
+        """准备退款人工审核申请，客户在界面确认后才提交。"""
         ctx = _ctx(config)
         guard = _require_identity(ctx)
         if guard:
             return guard
-        return json.dumps(await RefundService().execute(
-            ctx.verified_customer_id, order_id, ctx.conversation_id, reason=reason,
-        ))
+        return await prepare_refund(ctx, order_id, reason)
+
+    async def prepare_refund(ctx, order_id, reason=None):
+        operation = "issue_refund" if reason is None else "escalate_to_human"
+        key = hashlib.sha256(f"{ctx.conversation_id}:{ctx.message_id}:{operation}".encode()).hexdigest()
+        try:
+            return json.dumps(await RefundConfirmationService().prepare(ctx.verified_customer_id,
+                order_id, ctx.conversation_id, message_id=ctx.message_id, request_id=key, reason=reason))
+        except ConfirmationError as error:
+            if error.status_code == 404:
+                return json.dumps({"error": "order_not_found", "order_id": order_id})
+            return json.dumps({"error": "confirmation_unavailable", "message": error.message})
 
     return [
         get_my_profile,

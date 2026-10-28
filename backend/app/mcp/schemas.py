@@ -98,9 +98,23 @@ class RefundEligibility(BaseModel):
     decision: Literal["approved", "denied", "escalated"]
 
 
+class RefundConfirmationView(BaseModel):
+    id: Identifier
+    conversation_id: Identifier
+    order_id: Identifier
+    product_name: str
+    model_code: str | None
+    amount: Decimal
+    currency: Literal["USD"]
+    operation: Literal["issue_refund", "escalate_to_human"]
+    status: Literal["pending", "confirmed", "cancelled", "expired", "stale"]
+    expires_at: datetime
+
+
 class RefundDecision(BaseModel):
     order_id: Identifier
-    decision: Literal["approved", "denied", "escalated"]
+    decision: Literal["approved", "denied", "escalated", "awaiting_confirmation"]
+    confirmation: RefundConfirmationView | None = None
     refund_recorded: bool = False
     amount: float = 0.0
     reasons: list[str] = Field(default_factory=list)

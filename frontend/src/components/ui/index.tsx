@@ -127,6 +127,7 @@ function useModalFocus(open: boolean, panelRef: RefObject<HTMLElement>, onClose:
       if (e.key === "Escape") closeRef.current();
       if (e.key !== "Tab") return;
       const items = focusable();
+      if (!items.length) { e.preventDefault(); panelRef.current?.focus(); return; }
       const first = items[0], last = items[items.length - 1];
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
@@ -181,4 +182,15 @@ export function Drawer({ open, onClose, title, children }: {
       </div>
     </div>
   );
+}
+
+export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  useModalFocus(true, panelRef, onClose);
+  return <div className="fixed inset-0 z-50 grid place-items-center p-4" role="dialog" aria-modal="true" aria-label={title}>
+    <div aria-hidden="true" className="absolute inset-0 bg-black/45 backdrop-blur-sm" onClick={onClose} />
+    <div ref={panelRef} tabIndex={-1} className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-line bg-surface p-6 shadow-2xl sm:p-8">
+      {children}
+    </div>
+  </div>;
 }

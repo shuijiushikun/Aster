@@ -21,7 +21,7 @@ from app.agent.llm import FAKE_MODEL_NAME
 from app.localization import ORDER_STATUS, product_name
 
 # 中文与订单号相邻时不能使用 Unicode 的 \b，否则“订单ORD-1001退款”无法匹配。
-_ORDER_RE = re.compile(r"(?<![A-Z0-9-])[A-Z]{2,4}-\d{3,}(?:-[A-Z0-9]+)?(?![A-Z0-9-])", re.I)
+_ORDER_RE = re.compile(r"(?<![A-Z0-9-])[A-Z]{2,4}-(?:[A-Z0-9]+-)*\d{3,}(?:-[A-Z0-9]+)?(?![A-Z0-9-])", re.I)
 # 退款申请与否定表达共用动作词，避免新增说法后“不要退掉”等被误触发。
 _ZH_REFUND_ACTION = r"(?:退款|退货|退钱|退回货款|退掉|退一次款)"
 _REFUND_RE = re.compile(r"\b(refund|return|money back)\b|" + _ZH_REFUND_ACTION, re.I)

@@ -155,7 +155,6 @@ async def snapshot(order_id, other_order):
 async def test_business_scenario(case, live_setup, client, monkeypatch):
     from app.agent.runner import run_agent_turn
     from app.commerce_mcp import operations
-    from app.mcp.schemas import failure
     from app.rag.schemas import RetrievalResult
 
     commerce, rebuild = live_setup
@@ -171,9 +170,6 @@ async def test_business_scenario(case, live_setup, client, monkeypatch):
         nonlocal dropped
         result = await original_call(principal, name, arguments, **kwargs)
         calls.append({"name": name, "arguments": arguments, "result": result.model_dump(mode="json")})
-        if case.setup.get("fault") == "drop_first_write_response" and name == "issue_refund" and not dropped:
-            dropped = True
-            return failure("OUTCOME_UNKNOWN", "评测注入：写入完成但响应丢失，请查询实际状态。")
         return result
 
     monkeypatch.setattr(commerce, "call", record_call)
@@ -199,6 +195,22 @@ async def test_business_scenario(case, live_setup, client, monkeypatch):
                 record["reply"] = "\n".join(e["content"] for e in events if e["kind"] == "message")
                 record["events"] = events
                 check("聊天返回最终回复", bool(record["reply"]))
+            elif step.action == "confirm_refund":
+                from app.after_sales.refund_confirmation import RefundConfirmationService
+
+                proposal = await RefundConfirmationService().pending(owner.sub, cid)
+                assert proposal is not None, "应先取得待客户确认的退款单"
+                url = f"/api/me/conversations/{cid}/refund-confirmations/{proposal['id']}"
+                headers = auth(owner.sub)
+                response = await client.post(url, headers=headers, json={"decision": "confirm"})
+                check("客户确认接口执行成功", response.status_code == 200)
+                if case.setup.get("fault") == "drop_first_write_response":
+                    # 丢弃第一次成功响应，再以同一确认单重放客户请求。
+                    dropped = True
+                    replay = await client.post(url, headers=headers, json={"decision": "confirm"})
+                    check("确认响应丢失后重试返回同一结果", replay.json() == response.json())
+                    record["discarded_first_response"] = True
+                record["response"] = response.json()
             elif step.action == "restart_worker":
                 await rebuild()
             elif step.action == "replay_request":

@@ -36,6 +36,7 @@ import re
 import time
 import uuid
 from collections.abc import AsyncIterator
+from contextlib import aclosing
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from sqlalchemy import func, insert, select, update
@@ -43,6 +44,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app import redis as shared
 from app import tracing
+from app.after_sales.refund_confirmation import confirmation_reply
 from app.agent.context import grounded_id, identifiers
 from app.agent.graph import get_agent
 from app.agent.llm import primary_model_name, use_prompt_caching
@@ -53,6 +55,7 @@ from app.agent.tools import ToolContext, tool_config
 from app.config import get_settings
 from app.db import session as db
 from app.db.models import Conversation, Message, Order, ReasoningEvent, Refund, utcnow
+from app.db.turns import StaleTurn, TurnStamp, lock_conversation, turn_scope
 from app.events import broadcaster
 from app.observability import (
     LLM_FALLBACKS,
@@ -230,8 +233,10 @@ def _step_type_for_tool(name: str) -> str:
     return "tool_result"
 
 
-async def _save_message(cid: str, role: str, content: str) -> int:
+async def _save_message(cid: str, role: str, content: str, *, lock_token: str | None = None) -> int:
     async with db.SessionLocal() as session:
+        if role == "user":
+            await lock_conversation(session, cid, lock_token)
         msg = Message(conversation_id=cid, role=role, content=content)
         session.add(msg)
         await session.commit()
@@ -268,18 +273,32 @@ async def historical_refund_reply(customer_id, messages, text, observed_orders):
 
 
 async def run_agent_turn(
-    customer_id: str, conversation_id: str | None, user_text: str
+    customer_id: str, conversation_id: str | None, user_text: str, *, lock_token: str | None = None
+) -> AsyncIterator[dict]:
+    try:
+        if conversation_id is None:
+            conversation_id = await create_conversation(customer_id)
+        await load_owned_conversation(customer_id, conversation_id)
+        mid = await _save_message(conversation_id, "user", user_text, lock_token=lock_token)
+        with turn_scope(TurnStamp(conversation_id, mid)):
+            async with aclosing(_run_agent_turn(customer_id, conversation_id, user_text, mid)) as stream:
+                async for event in stream:
+                    yield event
+    except StaleTurn as error:
+        # 失效轮次的错误只回传自身连接；不再写消息、事件或摘要。
+        yield {"kind": "error", "message": str(error)}
+
+
+async def _run_agent_turn(
+    customer_id: str, conversation_id: str, user_text: str, user_msg_id: int
 ) -> AsyncIterator[dict]:
     settings = get_settings()
     started = time.perf_counter()
-    if conversation_id is None:
-        conversation_id = await create_conversation(customer_id)
     convo = await load_owned_conversation(customer_id, conversation_id)
     cid = convo.id
     conversation_id_var.set(cid)
 
     # 先将用户消息写入数据库，后续加载历史时会读到它。
-    user_msg_id = await _save_message(cid, "user", user_text)
     # 管理端通过广播收到这条用户消息；客户页面已先显示自己的输入，不再重复回传。
     await broadcaster.publish(cid, {"kind": "message", "role": "user", "content": user_text})
 
@@ -345,6 +364,8 @@ async def run_agent_turn(
                             await maybe_summarize(
                                 customer_id, cid, ModelCalls(get_chat_model(), get_fallback_model()), run_config,
                             )
+            except StaleTurn:
+                raise
             except Exception as exc:
                 logger.warning("summary preparation failed error_type=%s", type(exc).__name__)
             finally:
@@ -417,6 +438,7 @@ async def run_agent_turn(
     observed_orders: set[str] = set()
     decision_in_turn: str | None = None
     fallback_in_turn = False
+    pending_refund = None
 
     async def drain_usage():
         nonlocal fallback_in_turn
@@ -492,11 +514,16 @@ async def run_agent_turn(
                                     decision_in_turn = decision
                                 if msg.name == "issue_refund" and decision == "approved":
                                     approved_in_turn = True
+                                if (decision_data or {}).get("confirmation"):
+                                    pending_refund = decision_data["confirmation"]
                             yield await emit(
                                 _step_type_for_tool(msg.name),
                                 node,
                                 {"tool": msg.name, "result": result},
                             )
+    except StaleTurn:
+        tracing.finish_turn(tracer, tracing.TurnOutcome(decision=decision_in_turn, error=True))
+        raise
     except Exception as exc:  # 处理模型或供应商错误、超时及递归次数超限。
         # A provider may have completed earlier calls before another node failed.
         async for usage_event in drain_usage():
@@ -527,6 +554,8 @@ async def run_agent_turn(
     finally:
         TURNS_IN_FLIGHT.dec()
 
+    if pending_refund:
+        final_text = confirmation_reply(pending_refund)
     if not final_text:
         final_text = "抱歉，暂时无法完成该请求，请稍后重试或联系人工客服。"
 

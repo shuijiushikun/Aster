@@ -11,6 +11,7 @@ from langgraph.types import Overwrite
 from pydantic import ValidationError
 
 from app.after_sales.intent import TurnIntent, classify_intent, requested_actions
+from app.after_sales.refund_confirmation import confirmation_reply
 from app.agent.answer_grounding import ground_answer
 from app.agent.context import assemble, context_data, current_text, grounded_id, identifiers
 from app.agent.prompts import get_after_sales_prompt
@@ -31,6 +32,7 @@ class ChatState(TypedDict, total=False):
     workflow_result: dict
     final_response: str
     turn_intent: dict
+    refund_confirmation: dict
 
 
 _STATUSES = {
@@ -155,9 +157,13 @@ def compile_chat_graph(model, fallback=None):
                     updates["workflow_result"] = _ctx(config).workflow_result
                 elif name == "get_tickets" and len(facts.get("tickets", [])) == 1:
                     updates["ticket_result"] = facts["tickets"][0]
+                elif name in {"issue_refund", "escalate_to_human"} and facts.get("confirmation"):
+                    updates["refund_confirmation"] = facts["confirmation"]
         return {"messages": messages, "tool_count": count, **updates}
 
     async def finalize(state: ChatState, config):
+        if state.get("refund_confirmation"):
+            return {"final_response": confirmation_reply(state["refund_confirmation"])}
         last = state["messages"][-1]
         text = message_text(last) if isinstance(last, AIMessage) and not last.tool_calls else ""
         ticket = state.get("ticket_result")
@@ -211,7 +217,8 @@ def compile_chat_graph(model, fallback=None):
     graph.add_node("finalize", finalize)
     graph.set_entry_point("agent")
     graph.add_conditional_edges("agent", lambda s: "tools" if s["messages"][-1].tool_calls else "finalize")
-    graph.add_conditional_edges("tools", lambda s: "finalize" if s["tool_count"] >= get_settings().agent_max_tool_calls else "agent")
+    graph.add_conditional_edges("tools", lambda s: "finalize" if s.get("refund_confirmation")
+                                or s["tool_count"] >= get_settings().agent_max_tool_calls else "agent")
     graph.add_edge("finalize", END)
     return graph.compile()
 

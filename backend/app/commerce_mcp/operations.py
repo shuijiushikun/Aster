@@ -14,15 +14,18 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.after_sales.intent import TurnIntent, requested_actions
 from app.after_sales.references import resolve_order_reference
+from app.after_sales.refund_confirmation import ConfirmationError, RefundConfirmationService
 from app.after_sales.refund_service import RefundService
 from app.after_sales.requests import RequestConflict
 from app.after_sales.schemas import EvidenceRef, ExchangeInput
 from app.after_sales.service import TicketError, TicketService
 from app.agent.context import grounded_id
+from app.agent.tokens import truncate_tokens
 from app.auth import Principal
 from app.config import get_settings
 from app.db import session as db
 from app.db.models import Conversation, Customer, KnowledgeDocument, Message, Order, Product
+from app.db.turns import StaleTurn, TurnStamp, turn_scope
 from app.mcp.auth import service_secret
 from app.mcp.schemas import (
     CustomerProfile,
@@ -53,11 +56,18 @@ def identity(ctx):
     return state.commerce_customer_id, state.commerce_turn
 
 
-async def result(schema, operation, *, write=False):
+async def result(schema, operation, *, write=False, ctx=None):
     try:
-        return schema(ok=True, data=await operation)
+        turn = identity(ctx)[1] if ctx else {}
+        stamp = TurnStamp(turn["conversation_id"], turn["message_id"]) if turn.get("message_id") else None
+        with turn_scope(stamp):
+            return schema(ok=True, data=await operation)
+    except StaleTurn as error:
+        return failure("ACTION_NOT_REQUESTED", str(error))
     except OperationError as error:
         return failure(error.code, error.message)
+    except ConfirmationError as error:
+        return failure("NOT_FOUND" if error.status_code == 404 else "BUSINESS_REJECTED", error.message)
     except RequestConflict:
         return failure("REQUEST_CONFLICT", "同一办理请求的内容发生变化，请核实后重新提交。")
     except TicketError as error:
@@ -144,7 +154,7 @@ def register_business_tools(server, settings):
                     raise OperationError("NOT_FOUND", "未找到客户资料。")
                 return CustomerProfile(customer_id=customer.id, name=customer.name,
                                        email=customer.email, loyalty_tier=customer.loyalty_tier)
-        return await result(ReadResult[CustomerProfile], run())
+        return await result(ReadResult[CustomerProfile], run(), ctx=ctx)
 
     @server.tool(annotations=READ_ONLY)
     async def check_refund_eligibility(order_id: Identifier, ctx: Context) -> ReadResult[RefundEligibility]:
@@ -154,12 +164,13 @@ def register_business_tools(server, settings):
             if data.get("error"):
                 raise OperationError("NOT_FOUND", "未找到可访问的订单。")
             return RefundEligibility.model_validate(data)
-        return await result(ReadResult[RefundEligibility], run())
+        return await result(ReadResult[RefundEligibility], run(), ctx=ctx)
 
     async def refund(ctx, order_id, reason=None):
         operation = "issue_refund" if reason is None else "escalate_to_human"
         owner, cid, key = await authorize_write(ctx, order_id, operation)
-        data = await RefundService().execute(owner, order_id, cid, request_id=key, reason=reason)
+        data = await RefundConfirmationService().prepare(owner, order_id, cid,
+            message_id=identity(ctx)[1].get("message_id"), request_id=key, reason=reason)
         if data.get("error"):
             raise OperationError("NOT_FOUND" if data["error"] == "order_not_found" else "BUSINESS_REJECTED",
                                  data.get("message", "未找到可访问的订单。"))
@@ -167,13 +178,13 @@ def register_business_tools(server, settings):
 
     @server.tool(annotations=WRITE)
     async def issue_refund(order_id: Identifier, ctx: Context) -> ReadResult[RefundDecision]:
-        """客户明确申请后办理模拟退款；事务内复查资格，同一请求重放返回原结果。"""
-        return await result(ReadResult[RefundDecision], refund(ctx, order_id), write=True)
+        """准备退款确认单；只有客户在界面确认后才执行，返回待确认不代表已退款。"""
+        return await result(ReadResult[RefundDecision], refund(ctx, order_id), write=True, ctx=ctx)
 
     @server.tool(annotations=WRITE)
     async def escalate_to_human(order_id: Identifier, reason: Target, ctx: Context) -> ReadResult[RefundDecision]:
-        """仅对符合规则且超过自动批准金额的退款申请转人工。"""
-        return await result(ReadResult[RefundDecision], refund(ctx, order_id, reason), write=True)
+        """准备大额退款的人工审核申请，客户在界面确认后才提交。"""
+        return await result(ReadResult[RefundDecision], refund(ctx, order_id, reason), write=True, ctx=ctx)
 
     @server.tool(annotations=READ_ONLY)
     async def search_knowledge(query: Query, ctx: Context, order_id: Identifier | None = None,
@@ -186,7 +197,7 @@ def register_business_tools(server, settings):
             options = {"overview": True} if overview else {}
             evidence = await retrieve_knowledge(query, model_code=code, category=category, **options)
             for source in evidence.sources:
-                source.excerpt = source.excerpt[:settings.context_evidence_max_chars]
+                source.excerpt = truncate_tokens(source.excerpt, settings.context_evidence_max_tokens)
             proof = None
             if evidence.status == "ok" and order_id and turn.get("message_id") and not overview:
                 refs = [EvidenceRef(document_id=s.document_id, revision=s.revision,
@@ -198,7 +209,7 @@ def register_business_tools(server, settings):
                                     "iss": "commerce-mcp", "aud": "exchange-evidence",
                                     "iat": now, "exp": now + 600}, secret, algorithm="HS256")
             return KnowledgeSearch(**evidence.model_dump(), evidence_token=proof)
-        return await result(ReadResult[KnowledgeSearch], run())
+        return await result(ReadResult[KnowledgeSearch], run(), ctx=ctx)
 
     @server.tool(annotations=WRITE)
     async def create_exchange_request(order_id: Identifier, description: Query, ctx: Context,
@@ -245,7 +256,7 @@ def register_business_tools(server, settings):
             detail = await service.detail(principal, ticket.id)
             return TicketInfo(id=ticket.id, order_id=ticket.order_id, status=detail.status,
                               reference_code=detail.reference_code)
-        return await result(ReadResult[TicketInfo], run(), write=True)
+        return await result(ReadResult[TicketInfo], run(), write=True, ctx=ctx)
 
     @server.tool(annotations=READ_ONLY)
     async def get_tickets(ctx: Context, ticket_id: Identifier | None = None,
@@ -261,4 +272,4 @@ def register_business_tools(server, settings):
                 details = [await service.detail(principal, t.id) for t in rows]
             return TicketPage(tickets=[TicketInfo(id=t.id, order_id=t.order_id, status=t.status,
                                                   reference_code=t.reference_code) for t in details])
-        return await result(ReadResult[TicketPage], run())
+        return await result(ReadResult[TicketPage], run(), ctx=ctx)

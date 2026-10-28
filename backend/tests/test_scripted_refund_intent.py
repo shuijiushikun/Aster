@@ -17,6 +17,8 @@ class ScriptedRefundIntentTests(unittest.TestCase):
         for text, order_id in [
             ("我想退掉订单 ORD-1003 的55 英寸 4K OLED 电视。", "ORD-1003"),
             ("请给订单 ORD-1004 再退一次款。", "ORD-1004"),
+            ("请帮我退款 ORD-DEMO-1001", "ORD-DEMO-1001"),
+            ("申请退款 ORD-EX-1001", "ORD-EX-1001"),
         ]:
             with self.subTest(text=text):
                 reply = self.model._decide([HumanMessage(content=text)])

@@ -12,6 +12,7 @@ from starlette.applications import Starlette
 from app.config import Settings, get_settings
 from app.db import session as db
 from app.db.models import ExchangeAcceptance, Order, Product
+from app.db.turns import turn_scope
 from app.localization import product_name
 from app.mcp.auth import ServiceContextMiddleware, service_secret
 from app.mcp.schemas import (
@@ -32,10 +33,12 @@ READ_ONLY = ToolAnnotations(
 
 @asynccontextmanager
 async def read_session():
-    async with db.SessionLocal() as session, session.begin():
-        if session.get_bind().dialect.name == "postgresql":
-            await session.execute(text("SET TRANSACTION READ ONLY"))
-        yield session
+    # 此入口只有只读商城查询；数据库强制只读，避免申请轮次写锁。
+    with turn_scope(None):
+        async with db.SessionLocal() as session, session.begin():
+            if session.get_bind().dialect.name == "postgresql":
+                await session.execute(text("SET TRANSACTION READ ONLY"))
+            yield session
 
 
 def customer_id(ctx: Context) -> str:

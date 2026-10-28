@@ -9,6 +9,7 @@ import type {
   DemoSession,
   Meta,
   Order,
+  RefundConfirmation,
   TicketAccepted,
   TicketDecisionRequest,
   TicketStatus,
@@ -144,6 +145,16 @@ export async function fetchMyConversations(signal?: AbortSignal): Promise<Conver
 
 export async function fetchMyConversation(id: string, signal?: AbortSignal): Promise<ConversationDetail> {
   return (await request("customer", `/api/me/conversations/${encodeURIComponent(id)}`, { signal })).json();
+}
+
+export async function fetchRefundConfirmation(cid: string, signal?: AbortSignal): Promise<RefundConfirmation | null> {
+  return (await request("customer", `/api/me/conversations/${encodeURIComponent(cid)}/refund-confirmation`, { signal })).json();
+}
+
+export async function decideRefund(cid: string, id: string, decision: "confirm" | "cancel", signal?: AbortSignal): Promise<void> {
+  await request("customer", `/api/me/conversations/${encodeURIComponent(cid)}/refund-confirmations/${encodeURIComponent(id)}`, {
+    method: "POST", body: JSON.stringify({ decision }), signal,
+  });
 }
 
 export async function fetchConversation(id: string): Promise<ConversationDetail> {

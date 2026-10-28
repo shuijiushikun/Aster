@@ -159,10 +159,12 @@ class Settings(BaseSettings):
     # 请求、模型用量与运行边界。
     agent_v2_enabled: bool = True
     agent_max_tool_calls: int = Field(default=8, ge=1, le=20)
-    context_max_chars: int = Field(default=14000, gt=0)
-    context_evidence_max_chars: int = Field(default=1200, gt=0, le=4000)
+    # Total local token budget includes prompt, tool schemas, reply and margin.
+    context_max_tokens: int = Field(default=8192, gt=0)
+    context_token_margin: int = Field(default=256, ge=0)
+    context_evidence_max_tokens: int = Field(default=800, gt=0, le=4000)
     summary_timeout_s: float = Field(default=8, gt=0, le=30)
-    summary_max_chars: int = Field(default=1600, gt=0, le=4000)
+    summary_max_tokens: int = Field(default=1024, gt=0, le=4000)
     workflow_timeout_s: float = Field(default=30, gt=0, le=60)
     workflow_pool_size: int = Field(default=4, ge=1, le=16)
     max_message_chars: int = 2000
@@ -170,7 +172,7 @@ class Settings(BaseSettings):
     max_conversation_tokens: int = 60000
     customer_daily_token_budget: int = 300_000
     agent_recursion_limit: int = 24
-    max_output_tokens: int = 1024
+    max_output_tokens: int = Field(default=1024, gt=0)
     chat_rate_limit: str = "10/minute"
     # 背压控制：限制所有 Pod 正在处理的智能体对话轮数。
     max_concurrent_turns: int = 200
@@ -192,6 +194,12 @@ class Settings(BaseSettings):
     opik_api_key: str = ""
     opik_workspace: str = ""
     opik_project_name: str = "aster"
+
+    @model_validator(mode="after")
+    def _check_context_budget(self) -> "Settings":
+        if self.context_max_tokens <= self.max_output_tokens + self.context_token_margin:
+            raise ValueError("CONTEXT_MAX_TOKENS must exceed MAX_OUTPUT_TOKENS + CONTEXT_TOKEN_MARGIN")
+        return self
 
     @model_validator(mode="after")
     def _check_prod(self) -> "Settings":

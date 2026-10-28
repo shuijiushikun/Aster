@@ -134,7 +134,12 @@ async def test_mcp_rechecks_previous_short_order_reference_for_explicit_followup
         await session.flush()
         context["message_id"] = current.id
     result = await client.call(ALICE, "issue_refund", {"order_id": "ORD-EX-1001"}, turn_context=context)
-    assert result.ok and result.data.decision == "approved"
+    assert result.ok and result.data.decision == "awaiting_confirmation"
+    from app.after_sales.refund_confirmation import RefundConfirmationService
+
+    confirmed = await RefundConfirmationService().decide(ALICE.sub, context["conversation_id"],
+                                                         result.data.confirmation.id, "confirm")
+    assert confirmed["result"]["decision"] == "approved"
 
 
 @pytest.mark.parametrize("text,expected", [

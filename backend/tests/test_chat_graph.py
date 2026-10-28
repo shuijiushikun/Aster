@@ -7,6 +7,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from sqlalchemy import func, select
 
 from app import redis as shared
+from app.after_sales.refund_confirmation import RefundConfirmationService
 from app.agent import chat_graph, graph
 from app.agent.runner import historical_refund_reply, run_agent_turn
 from app.agent.streaming import GraphEvents
@@ -227,18 +228,25 @@ async def test_unknown_usage_and_provider_failure_keep_prior_usage(setup_chat, m
 async def test_refund_uses_mcp_and_preserves_guard_and_accounting(setup_chat, monkeypatch):
     use_model(monkeypatch, ai(call=("issue_refund", {"order_id": "ORD-1001"})), ai("模拟退款已批准。"))
     events = await turn("ORD-1001 帮我退款", customer="CUST-001")
-    assert "退款已批准" in final(events)
+    assert "确认框" in final(events) and "尚未执行" in final(events)
     assert not any(e.get("step_type") == "output_correction" for e in events)
-    assert len([e for e in events if e.get("step_type") == "usage"]) == 2
+    assert len([e for e in events if e.get("step_type") == "usage"]) == 1
     async with db.SessionLocal() as session:
         assert await session.scalar(select(func.count()).select_from(Refund).where(
-            Refund.order_id == "ORD-1001", Refund.decision == "approved")) == 1
+            Refund.order_id == "ORD-1001", Refund.decision == "approved")) == 0
+    cid = events[0]["conversation_id"]
+    service = RefundConfirmationService()
+    proposal = await service.pending("CUST-001", cid)
+    assert (await service.decide("CUST-001", cid, proposal["id"], "confirm"))["result"]["decision"] == "approved"
 
 
 async def test_verified_historical_refund_is_not_reported_as_unconfirmed(setup_chat, monkeypatch):
     use_model(monkeypatch, ai(call=("issue_refund", {"order_id": "ORD-1001"})), ai("模拟退款已批准。"))
     first = await turn("ORD-1001 帮我退款", customer="CUST-001")
     cid = first[0]["conversation_id"]
+    service = RefundConfirmationService()
+    proposal = await service.pending("CUST-001", cid)
+    await service.decide("CUST-001", cid, proposal["id"], "confirm")
     use_model(monkeypatch, ai("这笔订单已经成功退款，已经记录过一次。"))
     second = await turn("这笔订单再退款一次", customer="CUST-001", cid=cid)
     assert "未经系统确认" not in final(second)
@@ -281,8 +289,16 @@ async def test_escalated_refund_does_not_send_customer_to_exchange_tickets(setup
     use_model(monkeypatch, ai(call=("escalate_to_human", {"order_id": "ORD-1001", "reason": "金额超限"})),
               ai("已转人工，审核结果可在我的工单查看。"))
     events = await turn("ORD-1001 请帮我退款", customer="CUST-001")
-    assert "人工" in final(events) and "尚未批准" in final(events)
+    assert "人工" in final(events) and "尚未执行" in final(events)
     assert "我的工单" not in final(events)
+    service = RefundConfirmationService()
+    cid = events[0]["conversation_id"]
+    proposal = await service.pending("CUST-001", cid)
+    assert (await service.decide("CUST-001", cid, proposal["id"], "confirm"))["result"]["decision"] == "escalated"
+    async with db.SessionLocal() as session:
+        saved = await session.scalar(select(Message).where(Message.conversation_id == cid)
+                                     .order_by(Message.id.desc()).limit(1))
+        assert "尚未批准" in saved.content and "联系人工客服" in saved.content
 
 
 @pytest.mark.parametrize("text", ["ORD-1001 能退款吗", "ORD-1001 不要退款，只查询订单"])

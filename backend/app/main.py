@@ -2,7 +2,7 @@ import hmac
 import json
 import logging
 import random
-from contextlib import asynccontextmanager
+from contextlib import aclosing, asynccontextmanager
 from datetime import datetime
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
@@ -15,6 +15,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app import redis as shared
 from app import tracing
+from app.after_sales.refund_router import router as refund_router
 from app.after_sales.router import router as after_sales_router
 from app.agent.llm import primary_model_name
 from app.agent.runner import (
@@ -101,6 +102,7 @@ if settings.cors_origin_list:
 app.add_middleware(RequestContextMiddleware, max_body_bytes=settings.max_request_bytes)
 app.include_router(demo_router)
 app.include_router(after_sales_router)
+app.include_router(refund_router)
 
 
 @app.exception_handler(Exception)
@@ -292,7 +294,7 @@ async def chat(req: ChatRequest, principal: Principal = Depends(require_customer
         cid = new_conversation_id()
         is_new = True
 
-    # 同一会话同时只处理一轮；共享锁可跨后端进程或实例协调，防止消息顺序混乱。
+    # Redis 控制正常入场；锁过期后的旧轮次由数据库消息版本拦住写入。
     lock_ttl = settings.turn_timeout_s + 30
     lock = await shared.acquire_turn_lock(cid, lock_ttl)
     if lock is None:
@@ -320,8 +322,9 @@ async def chat(req: ChatRequest, principal: Principal = Depends(require_customer
     async def event_stream():
         SSE_STREAMS.labels("chat").inc()
         try:
-            async for event in run_agent_turn(principal.sub, cid, req.message):
-                yield {"data": json.dumps(event)}
+            async with aclosing(run_agent_turn(principal.sub, cid, req.message, lock_token=lock)) as stream:
+                async for event in stream:
+                    yield {"data": json.dumps(event)}
         except Exception as exc:
             # SSE 已发送响应头，无法再改 HTTP 状态；改为发送错误事件，异常细节留在日志。
             log_event(

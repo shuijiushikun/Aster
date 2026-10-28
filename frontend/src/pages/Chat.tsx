@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { Activity, ArrowUpRight, Check, ClipboardList, Copy, History, MessageCircle, Package, RotateCcw, Send, User } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, fetchMyConversation, fetchMyConversations, fetchOrders, friendlyError, streamChat } from "../api";
+import { ApiError, decideRefund, fetchRefundConfirmation, fetchMyConversation, fetchMyConversations, fetchOrders, friendlyError, streamChat } from "../api";
 import { getToken, onTokenChange } from "../auth";
 import AgentPanel from "../components/AgentPanel";
 import CustomerTickets from "../components/CustomerTickets";
@@ -10,6 +10,7 @@ import KnowledgeSources from "../components/KnowledgeSources";
 import Logo from "../components/Logo";
 import Markdown from "../components/Markdown";
 import OrdersPanel, { OrderSummary } from "../components/OrdersPanel";
+import RefundConfirmationDialog from "../components/RefundConfirmationDialog";
 import { useToast } from "../components/Toaster";
 import { Badge, Button, Drawer, IconButton, ResponsivePanel } from "../components/ui";
 import { getDemo } from "../lib/demo";
@@ -18,7 +19,7 @@ import { useMeta } from "../lib/meta";
 import { formatTime, toolLabel } from "../lib/locale";
 import { OUTCOME_META, outcomeOf } from "../lib/outcome";
 import { scenarioCards } from "../lib/scenarios";
-import type { AgentEvent, ChatMessage, ConversationSummary, KnowledgeSource, Order, StepEvent } from "../types";
+import type { AgentEvent, ChatMessage, ConversationSummary, KnowledgeSource, Order, RefundConfirmation, StepEvent } from "../types";
 
 const MAX_CHARS = 2000;
 const uid = () => crypto.randomUUID();
@@ -84,6 +85,12 @@ function ChatWorkspace({ token }: { token: string | null }) {
   const [historyLoading, setHistoryLoading] = useState(Boolean(token));
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(Boolean(token));
+  const [refundConfirmation, setRefundConfirmation] = useState<RefundConfirmation | null>(null);
+  const [refundBusy, setRefundBusy] = useState(false);
+  const [refundError, setRefundError] = useState<string | null>(null);
+  const confirming = useRef(false);
+  const currentConversation = useRef<string | null>(null);
+  const confirmationController = useRef<AbortController | null>(null);
   const storageKey = historyKey(token);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -93,7 +100,7 @@ function ChatWorkspace({ token }: { token: string | null }) {
   const sending = useRef(false);
   const historyController = useRef<AbortController | null>(null);
 
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; chatController.current?.abort(); ordersController.current?.abort(); historyController.current?.abort(); }; }, []);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; chatController.current?.abort(); ordersController.current?.abort(); historyController.current?.abort(); confirmationController.current?.abort(); }; }, []);
   function remember(id: string) { if (storageKey) { try { sessionStorage.setItem(storageKey, id); } catch { /* 无浏览器存储时仍可手动打开历史。 */ } } }
   const loadHistory = useCallback(async (signal?: AbortSignal) => {
     if (!token) return [];
@@ -108,14 +115,15 @@ function ChatWorkspace({ token }: { token: string | null }) {
     } finally { if (mounted.current && !signal?.aborted) setHistoryLoading(false); }
   }, [token]);
   async function openConversation(id: string, signal?: AbortSignal) {
-    if (sending.current) return;
+    if (sending.current || confirming.current) return;
     setRestoring(true); setHistoryError(null);
     try {
-      const detail = await fetchMyConversation(id, signal);
+      const [detail, proposal] = await Promise.all([fetchMyConversation(id, signal), fetchRefundConfirmation(id, signal)]);
       if (!mounted.current || signal?.aborted || getToken("customer") !== token) return;
       const saved = restoreHistory(detail);
       setMessages(saved.messages); setSteps(saved.steps); setSources(saved.sources); setSourcesReceived(saved.sourcesReceived);
       setTurnStart(saved.startedAt); setTurnEnd(saved.endedAt); setConversationId(id); setTicketId(null); remember(id); setDrawer(null);
+      currentConversation.current = id; setRefundConfirmation(proposal); setRefundError(null);
     } catch (err) { if (mounted.current && !signal?.aborted) { setHistoryError(friendlyError(err)); setDrawer("history"); } }
     finally { if (mounted.current && !signal?.aborted) setRestoring(false); }
   }
@@ -148,10 +156,32 @@ function ChatWorkspace({ token }: { token: string | null }) {
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [messages, streaming]);
   useEffect(() => { const el = inputRef.current; if (el) { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 160)}px`; } }, [input]);
 
-  function reset() { setMessages([]); setSteps([]); setSources([]); setSourcesReceived(false); setTurnStart(null); setTurnEnd(null); setConversationId(null); setTicketId(null); remember(""); }
+  function reset() { currentConversation.current = null; setMessages([]); setSteps([]); setSources([]); setSourcesReceived(false); setTurnStart(null); setTurnEnd(null); setConversationId(null); setTicketId(null); setRefundConfirmation(null); setRefundError(null); remember(""); }
+  async function decideConfirmation(decision: "confirm" | "cancel") {
+    const proposal = refundConfirmation;
+    if (!proposal || confirming.current || !token || currentConversation.current !== proposal.conversation_id) return;
+    confirming.current = true; setRefundBusy(true); setRefundError(null);
+    const controller = new AbortController(); confirmationController.current = controller;
+    const alive = () => mounted.current && !controller.signal.aborted && getToken("customer") === token;
+    try {
+      await decideRefund(proposal.conversation_id, proposal.id, decision, controller.signal);
+      if (!alive()) return;
+      confirming.current = false;
+      setRefundConfirmation(null);
+      await openConversation(proposal.conversation_id, controller.signal);
+      void loadOrders(); void loadHistory(); setTicketVersion((v) => v + 1);
+    } catch (err) {
+      if (!alive()) return;
+      setRefundError(friendlyError(err));
+      if (err instanceof ApiError && err.status === 409) {
+        const current = await fetchRefundConfirmation(proposal.conversation_id, controller.signal).catch(() => proposal);
+        if (alive() && !current) { setRefundConfirmation(null); toast(friendlyError(err), "error"); }
+      }
+    } finally { confirming.current = false; if (alive()) setRefundBusy(false); }
+  }
   async function send(value: string) {
     const text = value.trim();
-    if (!text || text.length > MAX_CHARS || sending.current || restoring || !token) return;
+    if (!text || text.length > MAX_CHARS || sending.current || confirming.current || refundConfirmation || restoring || !token) return;
     sending.current = true;
     const controller = new AbortController(); chatController.current = controller;
     const alive = () => mounted.current && !controller.signal.aborted && getToken("customer") === token;
@@ -159,10 +189,11 @@ function ChatWorkspace({ token }: { token: string | null }) {
     setMessages((rows) => [...rows, { id: userId, role: "user", content: text, at: Date.now() }]);
     setInput(""); setSteps([]); setSources([]); setSourcesReceived(false); setTurnStart(Date.now()); setTurnEnd(null); setStreaming(true); setDrawer(null);
     const turnSteps: StepEvent[] = [];
+    let activeConversation = conversationId;
     const handle = (event: AgentEvent) => {
       if (!alive()) return;
       switch (event.kind) {
-        case "conversation": setConversationId(event.conversation_id); remember(event.conversation_id); break;
+        case "conversation": activeConversation = event.conversation_id; currentConversation.current = event.conversation_id; setConversationId(event.conversation_id); remember(event.conversation_id); break;
         case "step": turnSteps.push(event); setSteps([...turnSteps]); break;
         case "message": setMessages((rows) => [...rows, { id: uid(), role: event.role, content: event.content, at: Date.now(), outcome: outcomeOf(turnSteps) }]); break;
         case "error": setMessages((rows) => [...rows, { id: uid(), role: "assistant", content: event.message, at: Date.now(), error: true }]); break;
@@ -193,7 +224,14 @@ function ChatWorkspace({ token }: { token: string | null }) {
       if (err instanceof ApiError && err.status === 404) setConversationId(null);
     } finally {
       sending.current = false;
-      if (alive()) { setBusyNote(null); setStreaming(false); setTurnEnd(Date.now()); setTicketVersion((v) => v + 1); void loadOrders(); void loadHistory(); inputRef.current?.focus(); }
+      if (alive()) {
+        setBusyNote(null); setStreaming(false); setTurnEnd(Date.now()); setTicketVersion((v) => v + 1);
+        void loadOrders(); void loadHistory(); inputRef.current?.focus();
+        if (activeConversation) {
+          try { const proposal = await fetchRefundConfirmation(activeConversation, controller.signal); if (alive() && currentConversation.current === activeConversation) { setRefundConfirmation(proposal); setRefundError(null); } }
+          catch (err) { if (alive()) toast(`退款确认信息读取失败，可在历史对话中重新打开：${friendlyError(err)}`, "error"); }
+        }
+      }
     }
   }
   const selectedOrder = orders.find((o) => o.id === orderId) ?? null;
@@ -224,6 +262,7 @@ function ChatWorkspace({ token }: { token: string | null }) {
         <form className="composer-wrap" onSubmit={(e) => { e.preventDefault(); void send(input); }}><div className={clsx("composer", tooLong && "border-bad")}><label htmlFor="composer" className="sr-only">消息</label><textarea id="composer" ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(input); } }} rows={1} disabled={!token || restoring} placeholder={token ? "描述您的问题，或输入订单号…" : "请先选择客户身份"} className="min-h-[42px] flex-1 resize-none bg-transparent px-3 py-2.5 text-sm placeholder:text-subtle focus:outline-none focus-visible:ring-0" /><button type="submit" aria-label="发送消息" disabled={streaming || restoring || !token || !input.trim() || tooLong} className="send-button"><Send size={20} /></button></div><div className="mt-2 flex justify-between px-2 text-xs text-subtle"><span>回车发送 · Shift + 回车换行</span><span className={clsx(tooLong && "text-bad")}>{input.length > 1600 ? `${input.length} / ${MAX_CHARS}` : "业务结果以实际查询为准"}</span></div></form>
       </section>
     </div>
+    {refundConfirmation && <RefundConfirmationDialog proposal={refundConfirmation} busy={refundBusy} error={refundError} onDecide={(decision) => void decideConfirmation(decision)} />}
     <ResponsivePanel className="service-panel" open={drawer === "service"} onClose={() => setDrawer(null)} title="处理进度与售后工单">{servicePanel}</ResponsivePanel>
     <Drawer open={drawer === "orders"} onClose={() => setDrawer(null)} title="我的订单"><OrdersPanel orders={orders} loading={ordersLoading} disabled={streaming || restoring} onAsk={(text) => void send(text)} onSelect={(id) => { setOrderId(id); setDrawer(null); }} /></Drawer>
     <Drawer open={drawer === "history"} onClose={() => setDrawer(null)} title="历史对话"><ConversationHistory rows={histories} currentId={conversationId} loading={historyLoading || restoring} error={historyError} onSelect={(id) => void openConversation(id)} onRefresh={() => void loadHistory()} /></Drawer>

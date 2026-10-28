@@ -23,9 +23,10 @@ from pathlib import Path
 import yaml
 from sqlalchemy import select
 
+from app.after_sales.refund_confirmation import RefundConfirmationService
 from app.agent.runner import run_agent_turn
 from app.db import session as db
-from app.db.models import Customer, Order, Refund, utcnow
+from app.db.models import Customer, Message, Order, Refund, utcnow
 
 CASES_DIR = Path(__file__).parent / "cases"
 
@@ -245,6 +246,18 @@ async def run_case(case: Case) -> Run:
         if failed:
             error = failed
             break
+        # 旧版退款基准继续覆盖完整办理；显式模拟客户点击，并将该动作单独留在回放中。
+        # 授权缺失、取消、过期与篡改的测试直接调用生产入口，不使用这个客户模拟步骤。
+        service = RefundConfirmationService()
+        proposal = await service.pending(fixture.customer_id, conversation_id)
+        if proposal:
+            result = await service.decide(fixture.customer_id, conversation_id, proposal["id"], "confirm")
+            async with db.SessionLocal() as session:
+                reply = await session.scalar(select(Message.content).where(
+                    Message.conversation_id == conversation_id, Message.role == "assistant")
+                    .order_by(Message.id.desc()).limit(1))
+            turns.append({"user": f"[客户确认按钮] 确认 {proposal['order_id']}，{proposal['amount']} USD",
+                          "assistant": reply, "events": [], "customer_confirmation": result})
     async with db.SessionLocal() as s:
         rows = (
             await s.scalars(
