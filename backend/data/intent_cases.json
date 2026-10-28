@@ -1,0 +1,3885 @@
+[
+  {
+    "id": "I-LEGACY-001",
+    "group": "intent-legacy-001",
+    "split": "development",
+    "category": "商品知识",
+    "text": "HP-01 耳机的续航多长？",
+    "expected_intent": "query",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-002",
+    "group": "intent-legacy-002",
+    "split": "development",
+    "category": "订单查询",
+    "text": "帮我查一下 ORD-DEMO-1005",
+    "expected_intent": "query",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-003",
+    "group": "intent-legacy-003",
+    "split": "development",
+    "category": "退款资格",
+    "text": "ORD-DEMO-1001 能退款吗？",
+    "expected_intent": "query",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-004",
+    "group": "intent-legacy-004",
+    "split": "development",
+    "category": "换货政策",
+    "text": "耳机换货需要什么条件？",
+    "expected_intent": "query",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-005",
+    "group": "intent-legacy-005",
+    "split": "development",
+    "category": "故障咨询",
+    "text": "耳机左边没声音，怎么办？",
+    "expected_intent": "query",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-006",
+    "group": "intent-legacy-006",
+    "split": "development",
+    "category": "否定申请",
+    "text": "不要退款，只查 ORD-DEMO-1001",
+    "expected_intent": "query",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-007",
+    "group": "intent-legacy-007",
+    "split": "development",
+    "category": "取消意愿",
+    "text": "不换了，先放着吧",
+    "expected_intent": "query",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-008",
+    "group": "intent-legacy-008",
+    "split": "development",
+    "category": "直接退款",
+    "text": "ORD-DEMO-1001 帮我退款",
+    "expected_intent": "refund",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-009",
+    "group": "intent-legacy-009",
+    "split": "development",
+    "category": "礼貌退款",
+    "text": "ORD-DEMO-1001 可以帮我办理退款吗？",
+    "expected_intent": "refund",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-010",
+    "group": "intent-legacy-010",
+    "split": "development",
+    "category": "口语退款",
+    "text": "这笔订单我不想要了，给我退掉吧",
+    "expected_intent": "refund",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-011",
+    "group": "intent-legacy-011",
+    "split": "development",
+    "category": "直接换货",
+    "text": "ORD-DEMO-1005 耳机坏了，帮我换同型号",
+    "expected_intent": "exchange",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-012",
+    "group": "intent-legacy-012",
+    "split": "development",
+    "category": "礼貌换货",
+    "text": "可以帮我把这件衣服换大一码吗？",
+    "expected_intent": "exchange",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-013",
+    "group": "intent-legacy-013",
+    "split": "development",
+    "category": "改为换货",
+    "text": "不要退钱了，帮我换个新的",
+    "expected_intent": "exchange",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-014",
+    "group": "intent-legacy-014",
+    "split": "development",
+    "category": "两种选择",
+    "text": "帮我退款或者换货都行",
+    "expected_intent": "clarify",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-015",
+    "group": "intent-legacy-015",
+    "split": "development",
+    "category": "未选方案",
+    "text": "好的",
+    "expected_intent": "clarify",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "您要退款还是换货？"
+      }
+    ],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-016",
+    "group": "intent-legacy-016",
+    "split": "development",
+    "category": "确认退款",
+    "text": "确认",
+    "expected_intent": "refund",
+    "history": [
+      {
+        "role": "user",
+        "content": "ORD-DEMO-1001 想退"
+      },
+      {
+        "role": "assistant",
+        "content": "确认提交退款申请吗？"
+      }
+    ],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-017",
+    "group": "intent-legacy-017",
+    "split": "development",
+    "category": "确认换货",
+    "text": "就按这个办",
+    "expected_intent": "exchange",
+    "history": [
+      {
+        "role": "user",
+        "content": "ORD-DEMO-1005 换同型号"
+      },
+      {
+        "role": "assistant",
+        "content": "确认提交换货申请吗？"
+      }
+    ],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-018",
+    "group": "intent-legacy-018",
+    "split": "development",
+    "category": "确认查询",
+    "text": "好的",
+    "expected_intent": "query",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "需要先查询退款资格吗？"
+      }
+    ],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-019",
+    "group": "intent-legacy-019",
+    "split": "development",
+    "category": "旧请求新咨询",
+    "text": "先告诉我退款条件",
+    "expected_intent": "query",
+    "history": [
+      {
+        "role": "user",
+        "content": "帮我退款"
+      },
+      {
+        "role": "assistant",
+        "content": "请确认订单号。"
+      }
+    ],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-020",
+    "group": "intent-legacy-020",
+    "split": "development",
+    "category": "否定确认",
+    "text": "先别操作，我再想想",
+    "expected_intent": "query",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "确认提交退款申请吗？"
+      }
+    ],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-021",
+    "group": "intent-legacy-021",
+    "split": "development",
+    "category": "改写政策",
+    "text": "我就是看看退换货规定，别提交申请",
+    "expected_intent": "query",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-022",
+    "group": "intent-legacy-022",
+    "split": "development",
+    "category": "改写故障",
+    "text": "新买的耳机连不上手机，有什么排查办法",
+    "expected_intent": "query",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-023",
+    "group": "intent-legacy-023",
+    "split": "development",
+    "category": "改写退款",
+    "text": "麻烦给这笔订单办一下退货退款",
+    "expected_intent": "refund",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-024",
+    "group": "intent-legacy-024",
+    "split": "development",
+    "category": "改写换货",
+    "text": "衣服太紧了，麻烦替我申请更换成 L 码",
+    "expected_intent": "exchange",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-025",
+    "group": "intent-legacy-025",
+    "split": "development",
+    "category": "改写未选方案",
+    "text": "退也行换也行，你帮我决定",
+    "expected_intent": "clarify",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-026",
+    "group": "intent-legacy-026",
+    "split": "development",
+    "category": "改写确认换货",
+    "text": "麻烦了，办理吧",
+    "expected_intent": "exchange",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "要我帮您发起换货申请吗？"
+      }
+    ],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-027",
+    "group": "intent-legacy-027",
+    "split": "development",
+    "category": "改写确认查询",
+    "text": "嗯，先看看",
+    "expected_intent": "query",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "我可以先看看这个订单有没有退款资格。"
+      }
+    ],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-028",
+    "group": "intent-legacy-028",
+    "split": "development",
+    "category": "改写两种确认",
+    "text": "可以",
+    "expected_intent": "clarify",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "退货退款还是直接换同款，您选哪种？"
+      }
+    ],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-029",
+    "group": "intent-legacy-029",
+    "split": "development",
+    "category": "改写取消后咨询",
+    "text": "不退了，耳机续航呢",
+    "expected_intent": "query",
+    "history": [
+      {
+        "role": "user",
+        "content": "给我退款"
+      },
+      {
+        "role": "assistant",
+        "content": "请提供订单号"
+      }
+    ],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-030",
+    "group": "intent-legacy-030",
+    "split": "development",
+    "category": "改写办理问句",
+    "text": "我想退货，请问可以处理一下吗",
+    "expected_intent": "refund",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-031",
+    "group": "intent-legacy-031",
+    "split": "development",
+    "category": "改写办理流程",
+    "text": "换货怎么办理啊",
+    "expected_intent": "query",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-LEGACY-032",
+    "group": "intent-legacy-032",
+    "split": "development",
+    "category": "改写转退款",
+    "text": "不用换新的了，我要申请退钱",
+    "expected_intent": "refund",
+    "history": [],
+    "rationale": "原冒烟题，仅用于开发回归，不计为独立测试题。",
+    "origin": "legacy_smoke"
+  },
+  {
+    "id": "I-QUERY-01-1",
+    "group": "intent-refund-eligibility",
+    "split": "development",
+    "category": "refund-eligibility",
+    "history": [],
+    "text": "帮我看看这单是否满足退款条件",
+    "expected_intent": "query",
+    "rationale": "询问资格，尚未委托办理。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-01-2",
+    "group": "intent-refund-eligibility",
+    "split": "development",
+    "category": "refund-eligibility",
+    "history": [],
+    "text": "先核实一下订单有没有退款资格",
+    "expected_intent": "query",
+    "rationale": "询问资格，尚未委托办理。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-01-3",
+    "group": "intent-refund-eligibility",
+    "split": "development",
+    "category": "refund-eligibility",
+    "history": [],
+    "text": "我想了解这个订单允许退款吗",
+    "expected_intent": "query",
+    "rationale": "询问资格，尚未委托办理。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-02-1",
+    "group": "intent-exchange-policy",
+    "split": "development",
+    "category": "exchange-policy",
+    "history": [],
+    "text": "换同款之前需要满足哪些条件",
+    "expected_intent": "query",
+    "rationale": "询问政策，退款换货词语不构成办理授权。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-02-2",
+    "group": "intent-exchange-policy",
+    "split": "development",
+    "category": "exchange-policy",
+    "history": [],
+    "text": "申请更换尺码一般有什么要求",
+    "expected_intent": "query",
+    "rationale": "询问政策，退款换货词语不构成办理授权。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-02-3",
+    "group": "intent-exchange-policy",
+    "split": "development",
+    "category": "exchange-policy",
+    "history": [],
+    "text": "先解释下换货的规定给我听",
+    "expected_intent": "query",
+    "rationale": "询问政策，退款换货词语不构成办理授权。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-03-1",
+    "group": "intent-bluetooth-trouble",
+    "split": "development",
+    "category": "bluetooth-trouble",
+    "history": [],
+    "text": "这副耳机老是断连，先怎么排查",
+    "expected_intent": "query",
+    "rationale": "故障咨询，尚未选择售后办理。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-03-2",
+    "group": "intent-bluetooth-trouble",
+    "split": "development",
+    "category": "bluetooth-trouble",
+    "history": [],
+    "text": "耳机已经连接了为什么手机还在外放",
+    "expected_intent": "query",
+    "rationale": "故障咨询，尚未选择售后办理。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-03-3",
+    "group": "intent-bluetooth-trouble",
+    "split": "development",
+    "category": "bluetooth-trouble",
+    "history": [],
+    "text": "右边耳机声音特别小，该检查哪儿",
+    "expected_intent": "query",
+    "rationale": "故障咨询，尚未选择售后办理。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-04-1",
+    "group": "intent-halt-refund",
+    "split": "development",
+    "category": "halt-refund",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "要提交这笔订单的退款申请吗？"
+      }
+    ],
+    "text": "停一下，暂时先别退钱",
+    "expected_intent": "query",
+    "rationale": "明确暂缓，上一轮申请不继续授权本轮写入。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-04-2",
+    "group": "intent-halt-refund",
+    "split": "development",
+    "category": "halt-refund",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "要提交这笔订单的退款申请吗？"
+      }
+    ],
+    "text": "我还没决定，先不要退款",
+    "expected_intent": "query",
+    "rationale": "明确暂缓，上一轮申请不继续授权本轮写入。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-04-3",
+    "group": "intent-halt-refund",
+    "split": "development",
+    "category": "halt-refund",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "要提交这笔订单的退款申请吗？"
+      }
+    ],
+    "text": "先搁置退款，我考虑好了再说",
+    "expected_intent": "query",
+    "rationale": "明确暂缓，上一轮申请不继续授权本轮写入。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-05-1",
+    "group": "intent-size-question",
+    "split": "development",
+    "category": "size-question",
+    "history": [],
+    "text": "这款上衣的L号肩宽有多少",
+    "expected_intent": "query",
+    "rationale": "询问尺码资料，尚未委托换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-05-2",
+    "group": "intent-size-question",
+    "split": "development",
+    "category": "size-question",
+    "history": [],
+    "text": "给我看看M和L两个码的实际差别",
+    "expected_intent": "query",
+    "rationale": "询问尺码资料，尚未委托换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-05-3",
+    "group": "intent-size-question",
+    "split": "development",
+    "category": "size-question",
+    "history": [],
+    "text": "我身高差不多一米七五，该怎么比较尺码",
+    "expected_intent": "query",
+    "rationale": "询问尺码资料，尚未委托换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-06-1",
+    "group": "intent-confirm-lookup",
+    "split": "development",
+    "category": "confirm-lookup",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "要先帮您查查订单是否符合退款资格吗？"
+      }
+    ],
+    "text": "行，先看一下",
+    "expected_intent": "query",
+    "rationale": "短确认承接查询，而非承接退款申请。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-06-2",
+    "group": "intent-confirm-lookup",
+    "split": "development",
+    "category": "confirm-lookup",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "要先帮您查查订单是否符合退款资格吗？"
+      }
+    ],
+    "text": "可以，麻烦查查",
+    "expected_intent": "query",
+    "rationale": "短确认承接查询，而非承接退款申请。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-06-3",
+    "group": "intent-confirm-lookup",
+    "split": "development",
+    "category": "confirm-lookup",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "要先帮您查查订单是否符合退款资格吗？"
+      }
+    ],
+    "text": "好，你先查资格",
+    "expected_intent": "query",
+    "rationale": "短确认承接查询，而非承接退款申请。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-07-1",
+    "group": "intent-progress-only",
+    "split": "evaluation",
+    "category": "progress-only",
+    "history": [
+      {
+        "role": "user",
+        "content": "上周申请换货"
+      },
+      {
+        "role": "assistant",
+        "content": "可以为您查询工单进度。"
+      }
+    ],
+    "text": "现在这张申请到哪一步了",
+    "expected_intent": "query",
+    "rationale": "进度查询，已有申请不授权重复建单。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-07-2",
+    "group": "intent-progress-only",
+    "split": "evaluation",
+    "category": "progress-only",
+    "history": [
+      {
+        "role": "user",
+        "content": "上周申请换货"
+      },
+      {
+        "role": "assistant",
+        "content": "可以为您查询工单进度。"
+      }
+    ],
+    "text": "只看一下审核结果，别再建单",
+    "expected_intent": "query",
+    "rationale": "进度查询，已有申请不授权重复建单。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-07-3",
+    "group": "intent-progress-only",
+    "split": "evaluation",
+    "category": "progress-only",
+    "history": [
+      {
+        "role": "user",
+        "content": "上周申请换货"
+      },
+      {
+        "role": "assistant",
+        "content": "可以为您查询工单进度。"
+      }
+    ],
+    "text": "查询一下上次换货有没有批下来",
+    "expected_intent": "query",
+    "rationale": "进度查询，已有申请不授权重复建单。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-08-1",
+    "group": "intent-historical-refund-new-topic",
+    "split": "evaluation",
+    "category": "historical-refund-new-topic",
+    "history": [
+      {
+        "role": "user",
+        "content": "把这笔订单退款"
+      },
+      {
+        "role": "assistant",
+        "content": "请先核实订单。"
+      }
+    ],
+    "text": "先放着吧，我问问耳机怎么重新配对",
+    "expected_intent": "query",
+    "rationale": "本轮改为咨询，以最新表达为准。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-08-2",
+    "group": "intent-historical-refund-new-topic",
+    "split": "evaluation",
+    "category": "historical-refund-new-topic",
+    "history": [
+      {
+        "role": "user",
+        "content": "把这笔订单退款"
+      },
+      {
+        "role": "assistant",
+        "content": "请先核实订单。"
+      }
+    ],
+    "text": "退款晚点再说，先说下保养办法",
+    "expected_intent": "query",
+    "rationale": "本轮改为咨询，以最新表达为准。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-08-3",
+    "group": "intent-historical-refund-new-topic",
+    "split": "evaluation",
+    "category": "historical-refund-new-topic",
+    "history": [
+      {
+        "role": "user",
+        "content": "把这笔订单退款"
+      },
+      {
+        "role": "assistant",
+        "content": "请先核实订单。"
+      }
+    ],
+    "text": "我先了解衣服的尺码，退款先别动",
+    "expected_intent": "query",
+    "rationale": "本轮改为咨询，以最新表达为准。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-09-1",
+    "group": "intent-hypothetical-refund",
+    "split": "evaluation",
+    "category": "hypothetical-refund",
+    "history": [],
+    "text": "假如过两天想退款，需要准备什么",
+    "expected_intent": "query",
+    "rationale": "假设或明确保留决定，尚未委托执行。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-09-2",
+    "group": "intent-hypothetical-refund",
+    "split": "evaluation",
+    "category": "hypothetical-refund",
+    "history": [],
+    "text": "我还没要退，提前了解一下退款流程",
+    "expected_intent": "query",
+    "rationale": "假设或明确保留决定，尚未委托执行。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-09-3",
+    "group": "intent-hypothetical-refund",
+    "split": "evaluation",
+    "category": "hypothetical-refund",
+    "history": [],
+    "text": "只是问问退货怎么走，等我决定再提交",
+    "expected_intent": "query",
+    "rationale": "假设或明确保留决定，尚未委托执行。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-10-1",
+    "group": "intent-negate-exchange",
+    "split": "evaluation",
+    "category": "negate-exchange",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "要帮您申请更换同型号吗？"
+      }
+    ],
+    "text": "我先继续试用，暂时别申请换新的",
+    "expected_intent": "query",
+    "rationale": "否定或暂缓换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-10-2",
+    "group": "intent-negate-exchange",
+    "split": "evaluation",
+    "category": "negate-exchange",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "要帮您申请更换同型号吗？"
+      }
+    ],
+    "text": "先不换了，我想再检查一下设置",
+    "expected_intent": "query",
+    "rationale": "否定或暂缓换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-10-3",
+    "group": "intent-negate-exchange",
+    "split": "evaluation",
+    "category": "negate-exchange",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "要帮您申请更换同型号吗？"
+      }
+    ],
+    "text": "打住，今天不要提交换货",
+    "expected_intent": "query",
+    "rationale": "否定或暂缓换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-11-1",
+    "group": "intent-denied-record",
+    "split": "evaluation",
+    "category": "denied-record",
+    "history": [],
+    "text": "之前退款被拒的原因能查吗",
+    "expected_intent": "query",
+    "rationale": "查询历史原因，不发起新退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-11-2",
+    "group": "intent-denied-record",
+    "split": "evaluation",
+    "category": "denied-record",
+    "history": [],
+    "text": "帮我看上次申请为什么没通过",
+    "expected_intent": "query",
+    "rationale": "查询历史原因，不发起新退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-11-3",
+    "group": "intent-denied-record",
+    "split": "evaluation",
+    "category": "denied-record",
+    "history": [],
+    "text": "我只是想知道拒绝的依据是什么",
+    "expected_intent": "query",
+    "rationale": "查询历史原因，不发起新退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-12-1",
+    "group": "intent-order-list",
+    "split": "evaluation",
+    "category": "order-list",
+    "history": [],
+    "text": "我忘了单号，能列出我最近的订单吗",
+    "expected_intent": "query",
+    "rationale": "只读订单查询。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-12-2",
+    "group": "intent-order-list",
+    "split": "evaluation",
+    "category": "order-list",
+    "history": [],
+    "text": "看一下我都买过哪些东西",
+    "expected_intent": "query",
+    "rationale": "只读订单查询。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-12-3",
+    "group": "intent-order-list",
+    "split": "evaluation",
+    "category": "order-list",
+    "history": [],
+    "text": "查询我名下还没处理售后的订单",
+    "expected_intent": "query",
+    "rationale": "只读订单查询。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-13-1",
+    "group": "intent-ambiguous-ack",
+    "split": "evaluation",
+    "category": "ambiguous-ack",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "您好，我可以帮您了解订单和售后政策。"
+      }
+    ],
+    "text": "嗯嗯，知道了",
+    "expected_intent": "query",
+    "rationale": "普通确认缺少明确办理对象和委托，按普通对话处理。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-13-2",
+    "group": "intent-ambiguous-ack",
+    "split": "evaluation",
+    "category": "ambiguous-ack",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "您好，我可以帮您了解订单和售后政策。"
+      }
+    ],
+    "text": "好的谢谢你",
+    "expected_intent": "query",
+    "rationale": "普通确认缺少明确办理对象和委托，按普通对话处理。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-13-3",
+    "group": "intent-ambiguous-ack",
+    "split": "evaluation",
+    "category": "ambiguous-ack",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "您好，我可以帮您了解订单和售后政策。"
+      }
+    ],
+    "text": "明白，先这样",
+    "expected_intent": "query",
+    "rationale": "普通确认缺少明确办理对象和委托，按普通对话处理。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-14-1",
+    "group": "intent-refund-process-not-request",
+    "split": "evaluation",
+    "category": "refund-process-not-request",
+    "history": [],
+    "text": "退款具体是怎样申请的",
+    "expected_intent": "query",
+    "rationale": "询问办理流程，不等于委托现在办理。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-14-2",
+    "group": "intent-refund-process-not-request",
+    "split": "evaluation",
+    "category": "refund-process-not-request",
+    "history": [],
+    "text": "告诉我退货退款的操作步骤",
+    "expected_intent": "query",
+    "rationale": "询问办理流程，不等于委托现在办理。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-14-3",
+    "group": "intent-refund-process-not-request",
+    "split": "evaluation",
+    "category": "refund-process-not-request",
+    "history": [],
+    "text": "办理退款需要走哪几个环节",
+    "expected_intent": "query",
+    "rationale": "询问办理流程，不等于委托现在办理。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-15-1",
+    "group": "intent-cancel-question",
+    "split": "evaluation",
+    "category": "cancel-question",
+    "history": [],
+    "text": "换货待审核阶段还能撤销吗",
+    "expected_intent": "query",
+    "rationale": "询问取消规则，不在分类器中执行取消。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-15-2",
+    "group": "intent-cancel-question",
+    "split": "evaluation",
+    "category": "cancel-question",
+    "history": [],
+    "text": "已批准的换货为什么不能取消",
+    "expected_intent": "query",
+    "rationale": "询问取消规则，不在分类器中执行取消。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-15-3",
+    "group": "intent-cancel-question",
+    "split": "evaluation",
+    "category": "cancel-question",
+    "history": [],
+    "text": "如果撤销申请，以后还能重新申请吗",
+    "expected_intent": "query",
+    "rationale": "询问取消规则，不在分类器中执行取消。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-16-1",
+    "group": "intent-quoted-old-request",
+    "split": "evaluation",
+    "category": "quoted-old-request",
+    "history": [],
+    "text": "我上次说过“给我退钱”，今天只是来查状态",
+    "expected_intent": "query",
+    "rationale": "引用或回顾历史办理，不延续为本轮授权。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-16-2",
+    "group": "intent-quoted-old-request",
+    "split": "evaluation",
+    "category": "quoted-old-request",
+    "history": [],
+    "text": "聊天记录里的“申请换货”是昨天的，这次先查资料",
+    "expected_intent": "query",
+    "rationale": "引用或回顾历史办理，不延续为本轮授权。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-16-3",
+    "group": "intent-quoted-old-request",
+    "split": "evaluation",
+    "category": "quoted-old-request",
+    "history": [],
+    "text": "之前确实想退，现在只问能不能维修",
+    "expected_intent": "query",
+    "rationale": "引用或回顾历史办理，不延续为本轮授权。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-17-1",
+    "group": "intent-materials-question",
+    "split": "evaluation",
+    "category": "materials-question",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "您还可以补充问题描述。"
+      }
+    ],
+    "text": "描述里应该记录哪些现象",
+    "expected_intent": "query",
+    "rationale": "只咨询材料要求。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-17-2",
+    "group": "intent-materials-question",
+    "split": "evaluation",
+    "category": "materials-question",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "您还可以补充问题描述。"
+      }
+    ],
+    "text": "换衣服尺码需要写清什么",
+    "expected_intent": "query",
+    "rationale": "只咨询材料要求。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-17-3",
+    "group": "intent-materials-question",
+    "split": "evaluation",
+    "category": "materials-question",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "您还可以补充问题描述。"
+      }
+    ],
+    "text": "耳机故障的照片一定要交吗",
+    "expected_intent": "query",
+    "rationale": "只咨询材料要求。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-18-1",
+    "group": "intent-long-history-new-consult",
+    "split": "evaluation",
+    "category": "long-history-new-consult",
+    "history": [
+      {
+        "role": "user",
+        "content": "想了解退款"
+      },
+      {
+        "role": "assistant",
+        "content": "可以先核实订单"
+      },
+      {
+        "role": "user",
+        "content": "我先看看耳机资料"
+      },
+      {
+        "role": "assistant",
+        "content": "您想了解哪方面"
+      },
+      {
+        "role": "user",
+        "content": "断连的问题"
+      },
+      {
+        "role": "assistant",
+        "content": "需要我查询本型号的断连排查建议吗？"
+      }
+    ],
+    "text": "是的，只查排查建议",
+    "expected_intent": "query",
+    "rationale": "历史超过四条时仍由近期查询与当前消息决定。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-18-2",
+    "group": "intent-long-history-new-consult",
+    "split": "evaluation",
+    "category": "long-history-new-consult",
+    "history": [
+      {
+        "role": "user",
+        "content": "想了解退款"
+      },
+      {
+        "role": "assistant",
+        "content": "可以先核实订单"
+      },
+      {
+        "role": "user",
+        "content": "我先看看耳机资料"
+      },
+      {
+        "role": "assistant",
+        "content": "您想了解哪方面"
+      },
+      {
+        "role": "user",
+        "content": "断连的问题"
+      },
+      {
+        "role": "assistant",
+        "content": "需要我查询本型号的断连排查建议吗？"
+      }
+    ],
+    "text": "先给我看看说明",
+    "expected_intent": "query",
+    "rationale": "历史超过四条时仍由近期查询与当前消息决定。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-18-3",
+    "group": "intent-long-history-new-consult",
+    "split": "evaluation",
+    "category": "long-history-new-consult",
+    "history": [
+      {
+        "role": "user",
+        "content": "想了解退款"
+      },
+      {
+        "role": "assistant",
+        "content": "可以先核实订单"
+      },
+      {
+        "role": "user",
+        "content": "我先看看耳机资料"
+      },
+      {
+        "role": "assistant",
+        "content": "您想了解哪方面"
+      },
+      {
+        "role": "user",
+        "content": "断连的问题"
+      },
+      {
+        "role": "assistant",
+        "content": "需要我查询本型号的断连排查建议吗？"
+      }
+    ],
+    "text": "好，查一下说明资料",
+    "expected_intent": "query",
+    "rationale": "历史超过四条时仍由近期查询与当前消息决定。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-19-1",
+    "group": "intent-deny-both-options",
+    "split": "evaluation",
+    "category": "deny-both-options",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "您打算退款，还是换成同款？"
+      }
+    ],
+    "text": "这两个暂时都不要，先查原因",
+    "expected_intent": "query",
+    "rationale": "同时否定两种办理，不应归待选择的办理意图。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-19-2",
+    "group": "intent-deny-both-options",
+    "split": "evaluation",
+    "category": "deny-both-options",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "您打算退款，还是换成同款？"
+      }
+    ],
+    "text": "退和换我都先不办",
+    "expected_intent": "query",
+    "rationale": "同时否定两种办理，不应归待选择的办理意图。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-19-3",
+    "group": "intent-deny-both-options",
+    "split": "evaluation",
+    "category": "deny-both-options",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "您打算退款，还是换成同款？"
+      }
+    ],
+    "text": "先不做售后，告诉我耳机怎么连接",
+    "expected_intent": "query",
+    "rationale": "同时否定两种办理，不应归待选择的办理意图。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-20-1",
+    "group": "intent-amount-question",
+    "split": "evaluation",
+    "category": "amount-question",
+    "history": [],
+    "text": "这单如果能退，能退多少钱",
+    "expected_intent": "query",
+    "rationale": "金额咨询，尚未提交退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-20-2",
+    "group": "intent-amount-question",
+    "split": "evaluation",
+    "category": "amount-question",
+    "history": [],
+    "text": "先查一下原订单金额",
+    "expected_intent": "query",
+    "rationale": "金额咨询，尚未提交退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-QUERY-20-3",
+    "group": "intent-amount-question",
+    "split": "evaluation",
+    "category": "amount-question",
+    "history": [],
+    "text": "退款金额和购买金额是不是一样",
+    "expected_intent": "query",
+    "rationale": "金额咨询，尚未提交退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-01-1",
+    "group": "intent-direct-refund",
+    "split": "development",
+    "category": "direct-refund",
+    "history": [],
+    "text": "请把ORD-DEMO-1001这笔订单退掉",
+    "expected_intent": "refund",
+    "rationale": "明确委托退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-01-2",
+    "group": "intent-direct-refund",
+    "split": "development",
+    "category": "direct-refund",
+    "history": [],
+    "text": "现在替我发起这单的退款",
+    "expected_intent": "refund",
+    "rationale": "明确委托退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-01-3",
+    "group": "intent-direct-refund",
+    "split": "development",
+    "category": "direct-refund",
+    "history": [],
+    "text": "这笔订单不要了，请办理退货退款",
+    "expected_intent": "refund",
+    "rationale": "明确委托退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-02-1",
+    "group": "intent-polite-refund",
+    "split": "development",
+    "category": "polite-refund",
+    "history": [],
+    "text": "能否麻烦你替我提交退款申请",
+    "expected_intent": "refund",
+    "rationale": "礼貌问句表达的是委托办理。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-02-2",
+    "group": "intent-polite-refund",
+    "split": "development",
+    "category": "polite-refund",
+    "history": [],
+    "text": "方便的话帮我把这单退款办了",
+    "expected_intent": "refund",
+    "rationale": "礼貌问句表达的是委托办理。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-02-3",
+    "group": "intent-polite-refund",
+    "split": "development",
+    "category": "polite-refund",
+    "history": [],
+    "text": "请问能帮我办一下退货吗",
+    "expected_intent": "refund",
+    "rationale": "礼貌问句表达的是委托办理。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-03-1",
+    "group": "intent-refund-no-order",
+    "split": "development",
+    "category": "refund-no-order",
+    "history": [],
+    "text": "麻烦发起一下退款，我随后给订单号",
+    "expected_intent": "refund",
+    "rationale": "缺订单号应后续补充，不改变明确的退款意图。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-03-2",
+    "group": "intent-refund-no-order",
+    "split": "development",
+    "category": "refund-no-order",
+    "history": [],
+    "text": "我决定退钱，帮我办理",
+    "expected_intent": "refund",
+    "rationale": "缺订单号应后续补充，不改变明确的退款意图。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-03-3",
+    "group": "intent-refund-no-order",
+    "split": "development",
+    "category": "refund-no-order",
+    "history": [],
+    "text": "给我申请退货退款吧，单号我去找",
+    "expected_intent": "refund",
+    "rationale": "缺订单号应后续补充，不改变明确的退款意图。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-04-1",
+    "group": "intent-switch-to-refund",
+    "split": "development",
+    "category": "switch-to-refund",
+    "history": [
+      {
+        "role": "user",
+        "content": "原来打算更换同款"
+      },
+      {
+        "role": "assistant",
+        "content": "还需要确定最终方案。"
+      }
+    ],
+    "text": "改主意了，给我退货退款吧",
+    "expected_intent": "refund",
+    "rationale": "本轮明确选择退款，覆盖旧换货意愿。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-04-2",
+    "group": "intent-switch-to-refund",
+    "split": "development",
+    "category": "switch-to-refund",
+    "history": [
+      {
+        "role": "user",
+        "content": "原来打算更换同款"
+      },
+      {
+        "role": "assistant",
+        "content": "还需要确定最终方案。"
+      }
+    ],
+    "text": "不更换商品了，帮我申请退钱",
+    "expected_intent": "refund",
+    "rationale": "本轮明确选择退款，覆盖旧换货意愿。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-04-3",
+    "group": "intent-switch-to-refund",
+    "split": "development",
+    "category": "switch-to-refund",
+    "history": [
+      {
+        "role": "user",
+        "content": "原来打算更换同款"
+      },
+      {
+        "role": "assistant",
+        "content": "还需要确定最终方案。"
+      }
+    ],
+    "text": "换货就算了，现在直接办退款",
+    "expected_intent": "refund",
+    "rationale": "本轮明确选择退款，覆盖旧换货意愿。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-05-1",
+    "group": "intent-refund-confirm",
+    "split": "development",
+    "category": "refund-confirm",
+    "history": [
+      {
+        "role": "user",
+        "content": "ORD-DEMO-1001想退款"
+      },
+      {
+        "role": "assistant",
+        "content": "现在确认提交这笔订单的退款申请吗？"
+      }
+    ],
+    "text": "确认提交退款",
+    "expected_intent": "refund",
+    "rationale": "上条询问唯一退款申请，本轮明确确认。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-05-2",
+    "group": "intent-refund-confirm",
+    "split": "development",
+    "category": "refund-confirm",
+    "history": [
+      {
+        "role": "user",
+        "content": "ORD-DEMO-1001想退款"
+      },
+      {
+        "role": "assistant",
+        "content": "现在确认提交这笔订单的退款申请吗？"
+      }
+    ],
+    "text": "就按退款办理吧",
+    "expected_intent": "refund",
+    "rationale": "上条询问唯一退款申请，本轮明确确认。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-05-3",
+    "group": "intent-refund-confirm",
+    "split": "development",
+    "category": "refund-confirm",
+    "history": [
+      {
+        "role": "user",
+        "content": "ORD-DEMO-1001想退款"
+      },
+      {
+        "role": "assistant",
+        "content": "现在确认提交这笔订单的退款申请吗？"
+      }
+    ],
+    "text": "同意，帮我提交这笔退款申请",
+    "expected_intent": "refund",
+    "rationale": "上条询问唯一退款申请，本轮明确确认。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-06-1",
+    "group": "intent-english-refund",
+    "split": "development",
+    "category": "english-refund",
+    "history": [],
+    "text": "Please submit a refund for my order.",
+    "expected_intent": "refund",
+    "rationale": "英文明确委托退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-06-2",
+    "group": "intent-english-refund",
+    "split": "development",
+    "category": "english-refund",
+    "history": [],
+    "text": "I would like you to process a return and refund.",
+    "expected_intent": "refund",
+    "rationale": "英文明确委托退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-06-3",
+    "group": "intent-english-refund",
+    "split": "development",
+    "category": "english-refund",
+    "history": [],
+    "text": "Go ahead and refund this purchase, please.",
+    "expected_intent": "refund",
+    "rationale": "英文明确委托退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-07-1",
+    "group": "intent-refund-after-eligibility",
+    "split": "evaluation",
+    "category": "refund-after-eligibility",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "这笔订单符合当前退款规则。"
+      }
+    ],
+    "text": "那就替我提交退款吧",
+    "expected_intent": "refund",
+    "rationale": "查询资格后新增明确办理授权。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-07-2",
+    "group": "intent-refund-after-eligibility",
+    "split": "evaluation",
+    "category": "refund-after-eligibility",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "这笔订单符合当前退款规则。"
+      }
+    ],
+    "text": "既然符合条件，现在办退款",
+    "expected_intent": "refund",
+    "rationale": "查询资格后新增明确办理授权。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-07-3",
+    "group": "intent-refund-after-eligibility",
+    "split": "evaluation",
+    "category": "refund-after-eligibility",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "这笔订单符合当前退款规则。"
+      }
+    ],
+    "text": "好的，按你查到的这笔订单退钱",
+    "expected_intent": "refund",
+    "rationale": "查询资格后新增明确办理授权。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-08-1",
+    "group": "intent-refund-again-after-hold",
+    "split": "evaluation",
+    "category": "refund-again-after-hold",
+    "history": [
+      {
+        "role": "user",
+        "content": "先等等不要操作"
+      },
+      {
+        "role": "assistant",
+        "content": "好的，暂不办理。"
+      }
+    ],
+    "text": "我考虑好了，现在帮我退",
+    "expected_intent": "refund",
+    "rationale": "暂停后重新明确委托退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-08-2",
+    "group": "intent-refund-again-after-hold",
+    "split": "evaluation",
+    "category": "refund-again-after-hold",
+    "history": [
+      {
+        "role": "user",
+        "content": "先等等不要操作"
+      },
+      {
+        "role": "assistant",
+        "content": "好的，暂不办理。"
+      }
+    ],
+    "text": "现在决定退货，请提交申请",
+    "expected_intent": "refund",
+    "rationale": "暂停后重新明确委托退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-08-3",
+    "group": "intent-refund-again-after-hold",
+    "split": "evaluation",
+    "category": "refund-again-after-hold",
+    "history": [
+      {
+        "role": "user",
+        "content": "先等等不要操作"
+      },
+      {
+        "role": "assistant",
+        "content": "好的，暂不办理。"
+      }
+    ],
+    "text": "刚才暂停的那单，现在办理退款",
+    "expected_intent": "refund",
+    "rationale": "暂停后重新明确委托退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-09-1",
+    "group": "intent-refund-with-complaint",
+    "split": "evaluation",
+    "category": "refund-with-complaint",
+    "history": [],
+    "text": "耳机断断续续不好用，不想排查了，给我退款",
+    "expected_intent": "refund",
+    "rationale": "抱怨中包含明确退款委托。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-09-2",
+    "group": "intent-refund-with-complaint",
+    "split": "evaluation",
+    "category": "refund-with-complaint",
+    "history": [],
+    "text": "衣服质量让我不满意，麻烦办理退货退钱",
+    "expected_intent": "refund",
+    "rationale": "抱怨中包含明确退款委托。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-09-3",
+    "group": "intent-refund-with-complaint",
+    "split": "evaluation",
+    "category": "refund-with-complaint",
+    "history": [],
+    "text": "等了很久还是没解决，我选择退款，替我申请",
+    "expected_intent": "refund",
+    "rationale": "抱怨中包含明确退款委托。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-10-1",
+    "group": "intent-refund-one-of-orders",
+    "split": "evaluation",
+    "category": "refund-one-of-orders",
+    "history": [],
+    "text": "两笔订单里只把1001那笔退款，另外一笔留着",
+    "expected_intent": "refund",
+    "rationale": "订单消歧属于后续核验，业务类型已明确为退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-10-2",
+    "group": "intent-refund-one-of-orders",
+    "split": "evaluation",
+    "category": "refund-one-of-orders",
+    "history": [],
+    "text": "只退昨天那单，今天买的不要动",
+    "expected_intent": "refund",
+    "rationale": "订单消歧属于后续核验，业务类型已明确为退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-10-3",
+    "group": "intent-refund-one-of-orders",
+    "split": "evaluation",
+    "category": "refund-one-of-orders",
+    "history": [],
+    "text": "帮我退这副耳机，衣服那单保持原样",
+    "expected_intent": "refund",
+    "rationale": "订单消歧属于后续核验，业务类型已明确为退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-11-1",
+    "group": "intent-refund-after-denial",
+    "split": "evaluation",
+    "category": "refund-after-denial",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "上次申请已拒绝，重新申请仍需核实条件。"
+      }
+    ],
+    "text": "那我重新申请退款，请你提交",
+    "expected_intent": "refund",
+    "rationale": "是否符合重申请条件由业务层判断，意图是退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-11-2",
+    "group": "intent-refund-after-denial",
+    "split": "evaluation",
+    "category": "refund-after-denial",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "上次申请已拒绝，重新申请仍需核实条件。"
+      }
+    ],
+    "text": "请替我重新发起这笔退货申请",
+    "expected_intent": "refund",
+    "rationale": "是否符合重申请条件由业务层判断，意图是退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-11-3",
+    "group": "intent-refund-after-denial",
+    "split": "evaluation",
+    "category": "refund-after-denial",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "上次申请已拒绝，重新申请仍需核实条件。"
+      }
+    ],
+    "text": "我还是要退款，帮我再申请一次",
+    "expected_intent": "refund",
+    "rationale": "是否符合重申请条件由业务层判断，意图是退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-12-1",
+    "group": "intent-refund-other-person-order",
+    "split": "evaluation",
+    "category": "refund-other-person-order",
+    "history": [],
+    "text": "把ORD-OTHER-9001这单申请退款",
+    "expected_intent": "refund",
+    "rationale": "分类只识别退款诉求，归属校验必须由服务端另行拒绝。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-12-2",
+    "group": "intent-refund-other-person-order",
+    "split": "evaluation",
+    "category": "refund-other-person-order",
+    "history": [],
+    "text": "请替我退掉朋友发来的这个订单",
+    "expected_intent": "refund",
+    "rationale": "分类只识别退款诉求，归属校验必须由服务端另行拒绝。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-12-3",
+    "group": "intent-refund-other-person-order",
+    "split": "evaluation",
+    "category": "refund-other-person-order",
+    "history": [],
+    "text": "这单不是我的，但我想让你把它退了",
+    "expected_intent": "refund",
+    "rationale": "分类只识别退款诉求，归属校验必须由服务端另行拒绝。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-13-1",
+    "group": "intent-refund-uppercase",
+    "split": "evaluation",
+    "category": "refund-uppercase",
+    "history": [],
+    "text": "帮我对这笔订单申请REFUND",
+    "expected_intent": "refund",
+    "rationale": "中英混合的明确退款委托。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-13-2",
+    "group": "intent-refund-uppercase",
+    "split": "evaluation",
+    "category": "refund-uppercase",
+    "history": [],
+    "text": "这个order我不要了，麻烦给我退钱",
+    "expected_intent": "refund",
+    "rationale": "中英混合的明确退款委托。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-13-3",
+    "group": "intent-refund-uppercase",
+    "split": "evaluation",
+    "category": "refund-uppercase",
+    "history": [],
+    "text": "这单请走return and refund，替我提交",
+    "expected_intent": "refund",
+    "rationale": "中英混合的明确退款委托。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-14-1",
+    "group": "intent-refund-with-reason",
+    "split": "evaluation",
+    "category": "refund-with-reason",
+    "history": [],
+    "text": "重复购买了，帮我取消这次购买并退款",
+    "expected_intent": "refund",
+    "rationale": "退款理由与明确委托同时出现。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-14-2",
+    "group": "intent-refund-with-reason",
+    "split": "evaluation",
+    "category": "refund-with-reason",
+    "history": [],
+    "text": "买错型号，请帮我申请退货退款",
+    "expected_intent": "refund",
+    "rationale": "退款理由与明确委托同时出现。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-14-3",
+    "group": "intent-refund-with-reason",
+    "split": "evaluation",
+    "category": "refund-with-reason",
+    "history": [],
+    "text": "不再需要这个商品了，麻烦把钱退回",
+    "expected_intent": "refund",
+    "rationale": "退款理由与明确委托同时出现。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-15-1",
+    "group": "intent-refund-action-first",
+    "split": "evaluation",
+    "category": "refund-action-first",
+    "history": [],
+    "text": "提交退款申请，原因是买重了",
+    "expected_intent": "refund",
+    "rationale": "动作指令明确。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-15-2",
+    "group": "intent-refund-action-first",
+    "split": "evaluation",
+    "category": "refund-action-first",
+    "history": [],
+    "text": "办理退货退款，订单稍后补充",
+    "expected_intent": "refund",
+    "rationale": "动作指令明确。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-15-3",
+    "group": "intent-refund-action-first",
+    "split": "evaluation",
+    "category": "refund-action-first",
+    "history": [],
+    "text": "发起退款吧，我已经决定了",
+    "expected_intent": "refund",
+    "rationale": "动作指令明确。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-16-1",
+    "group": "intent-refund-short-ack",
+    "split": "evaluation",
+    "category": "refund-short-ack",
+    "history": [
+      {
+        "role": "user",
+        "content": "我选退款"
+      },
+      {
+        "role": "assistant",
+        "content": "是否确认发起退款申请？"
+      }
+    ],
+    "text": "行，办吧",
+    "expected_intent": "refund",
+    "rationale": "简短回答承接上条唯一退款申请。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-16-2",
+    "group": "intent-refund-short-ack",
+    "split": "evaluation",
+    "category": "refund-short-ack",
+    "history": [
+      {
+        "role": "user",
+        "content": "我选退款"
+      },
+      {
+        "role": "assistant",
+        "content": "是否确认发起退款申请？"
+      }
+    ],
+    "text": "嗯，确认办理",
+    "expected_intent": "refund",
+    "rationale": "简短回答承接上条唯一退款申请。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-16-3",
+    "group": "intent-refund-short-ack",
+    "split": "evaluation",
+    "category": "refund-short-ack",
+    "history": [
+      {
+        "role": "user",
+        "content": "我选退款"
+      },
+      {
+        "role": "assistant",
+        "content": "是否确认发起退款申请？"
+      }
+    ],
+    "text": "好，提交吧",
+    "expected_intent": "refund",
+    "rationale": "简短回答承接上条唯一退款申请。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-17-1",
+    "group": "intent-refund-after-product-consult",
+    "split": "evaluation",
+    "category": "refund-after-product-consult",
+    "history": [
+      {
+        "role": "user",
+        "content": "耳机怎么排查断连"
+      },
+      {
+        "role": "assistant",
+        "content": "可以重新配对复测。"
+      }
+    ],
+    "text": "我已经试过了，还是帮我申请退款吧",
+    "expected_intent": "refund",
+    "rationale": "从故障咨询转为明确退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-17-2",
+    "group": "intent-refund-after-product-consult",
+    "split": "evaluation",
+    "category": "refund-after-product-consult",
+    "history": [
+      {
+        "role": "user",
+        "content": "耳机怎么排查断连"
+      },
+      {
+        "role": "assistant",
+        "content": "可以重新配对复测。"
+      }
+    ],
+    "text": "不继续排查了，给我办退货退款",
+    "expected_intent": "refund",
+    "rationale": "从故障咨询转为明确退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-17-3",
+    "group": "intent-refund-after-product-consult",
+    "split": "evaluation",
+    "category": "refund-after-product-consult",
+    "history": [
+      {
+        "role": "user",
+        "content": "耳机怎么排查断连"
+      },
+      {
+        "role": "assistant",
+        "content": "可以重新配对复测。"
+      }
+    ],
+    "text": "解决不了，我决定退钱，麻烦办理",
+    "expected_intent": "refund",
+    "rationale": "从故障咨询转为明确退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-18-1",
+    "group": "intent-refund-state-not-authority",
+    "split": "evaluation",
+    "category": "refund-state-not-authority",
+    "history": [],
+    "text": "我已经收到货了，帮我发起退款",
+    "expected_intent": "refund",
+    "rationale": "客户陈述不决定资格，但当前诉求是退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-18-2",
+    "group": "intent-refund-state-not-authority",
+    "split": "evaluation",
+    "category": "refund-state-not-authority",
+    "history": [],
+    "text": "虽然可能超期，但请替我申请退货退款",
+    "expected_intent": "refund",
+    "rationale": "客户陈述不决定资格，但当前诉求是退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-18-3",
+    "group": "intent-refund-state-not-authority",
+    "split": "evaluation",
+    "category": "refund-state-not-authority",
+    "history": [],
+    "text": "这单是清仓商品，我还是要求提交退款申请",
+    "expected_intent": "refund",
+    "rationale": "客户陈述不决定资格，但当前诉求是退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-19-1",
+    "group": "intent-refund-before-exchange-accepted",
+    "split": "evaluation",
+    "category": "refund-before-exchange-accepted",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "换货还在待审批状态。"
+      }
+    ],
+    "text": "我改选退款，请替我办理",
+    "expected_intent": "refund",
+    "rationale": "明确改选退款，互斥与工单收尾由业务层核验。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-19-2",
+    "group": "intent-refund-before-exchange-accepted",
+    "split": "evaluation",
+    "category": "refund-before-exchange-accepted",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "换货还在待审批状态。"
+      }
+    ],
+    "text": "先结束换货这条路，给我申请退钱",
+    "expected_intent": "refund",
+    "rationale": "明确改选退款，互斥与工单收尾由业务层核验。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-19-3",
+    "group": "intent-refund-before-exchange-accepted",
+    "split": "evaluation",
+    "category": "refund-before-exchange-accepted",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "换货还在待审批状态。"
+      }
+    ],
+    "text": "我现在要退款，帮我提交这笔退款",
+    "expected_intent": "refund",
+    "rationale": "明确改选退款，互斥与工单收尾由业务层核验。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-20-1",
+    "group": "intent-refund-with-lookup",
+    "split": "evaluation",
+    "category": "refund-with-lookup",
+    "history": [],
+    "text": "先查我这笔订单，然后替我办理退款",
+    "expected_intent": "refund",
+    "rationale": "查询是办理前置步骤，不抹去明确退款委托。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-20-2",
+    "group": "intent-refund-with-lookup",
+    "split": "evaluation",
+    "category": "refund-with-lookup",
+    "history": [],
+    "text": "把单号核对好后直接提交退款申请",
+    "expected_intent": "refund",
+    "rationale": "查询是办理前置步骤，不抹去明确退款委托。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-REFUND-20-3",
+    "group": "intent-refund-with-lookup",
+    "split": "evaluation",
+    "category": "refund-with-lookup",
+    "history": [],
+    "text": "请核实订单信息并帮我发起退货退款",
+    "expected_intent": "refund",
+    "rationale": "查询是办理前置步骤，不抹去明确退款委托。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-01-1",
+    "group": "intent-defect-replacement",
+    "split": "development",
+    "category": "defect-replacement",
+    "history": [],
+    "text": "这副耳机左边一直不响，替我申请换同型号",
+    "expected_intent": "exchange",
+    "rationale": "明确委托同型号故障换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-01-2",
+    "group": "intent-defect-replacement",
+    "split": "development",
+    "category": "defect-replacement",
+    "history": [],
+    "text": "耳机坏了，麻烦给我发起故障换货",
+    "expected_intent": "exchange",
+    "rationale": "明确委托同型号故障换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-01-3",
+    "group": "intent-defect-replacement",
+    "split": "development",
+    "category": "defect-replacement",
+    "history": [],
+    "text": "请办理同款耳机更换，我要继续用这个型号",
+    "expected_intent": "exchange",
+    "rationale": "明确委托同型号故障换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-02-1",
+    "group": "intent-size-replacement",
+    "split": "development",
+    "category": "size-replacement",
+    "history": [],
+    "text": "衣服M号太紧，请替我申请换成L号",
+    "expected_intent": "exchange",
+    "rationale": "明确委托尺码换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-02-2",
+    "group": "intent-size-replacement",
+    "split": "development",
+    "category": "size-replacement",
+    "history": [],
+    "text": "麻烦把这件上衣换小一码",
+    "expected_intent": "exchange",
+    "rationale": "明确委托尺码换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-02-3",
+    "group": "intent-size-replacement",
+    "split": "development",
+    "category": "size-replacement",
+    "history": [],
+    "text": "我确认要大一号，帮我提交换货",
+    "expected_intent": "exchange",
+    "rationale": "明确委托尺码换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-03-1",
+    "group": "intent-exchange-no-order",
+    "split": "development",
+    "category": "exchange-no-order",
+    "history": [],
+    "text": "帮我申请换一件，我等会儿找单号",
+    "expected_intent": "exchange",
+    "rationale": "缺少订单信息不改变换货业务类型。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-03-2",
+    "group": "intent-exchange-no-order",
+    "split": "development",
+    "category": "exchange-no-order",
+    "history": [],
+    "text": "订单号还没找到，先说明我要你办换货",
+    "expected_intent": "exchange",
+    "rationale": "缺少订单信息不改变换货业务类型。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-03-3",
+    "group": "intent-exchange-no-order",
+    "split": "development",
+    "category": "exchange-no-order",
+    "history": [],
+    "text": "我决定更换商品，麻烦受理申请",
+    "expected_intent": "exchange",
+    "rationale": "缺少订单信息不改变换货业务类型。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-04-1",
+    "group": "intent-switch-to-exchange",
+    "split": "development",
+    "category": "switch-to-exchange",
+    "history": [
+      {
+        "role": "user",
+        "content": "最初想申请退款"
+      },
+      {
+        "role": "assistant",
+        "content": "请确定最终售后方案。"
+      }
+    ],
+    "text": "钱先别退了，替我换个同款",
+    "expected_intent": "exchange",
+    "rationale": "当前明确选择换货，覆盖旧退款诉求。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-04-2",
+    "group": "intent-switch-to-exchange",
+    "split": "development",
+    "category": "switch-to-exchange",
+    "history": [
+      {
+        "role": "user",
+        "content": "最初想申请退款"
+      },
+      {
+        "role": "assistant",
+        "content": "请确定最终售后方案。"
+      }
+    ],
+    "text": "我改成换货，麻烦提交",
+    "expected_intent": "exchange",
+    "rationale": "当前明确选择换货，覆盖旧退款诉求。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-04-3",
+    "group": "intent-switch-to-exchange",
+    "split": "development",
+    "category": "switch-to-exchange",
+    "history": [
+      {
+        "role": "user",
+        "content": "最初想申请退款"
+      },
+      {
+        "role": "assistant",
+        "content": "请确定最终售后方案。"
+      }
+    ],
+    "text": "不退钱，我要你帮我更换商品",
+    "expected_intent": "exchange",
+    "rationale": "当前明确选择换货，覆盖旧退款诉求。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-05-1",
+    "group": "intent-exchange-confirm",
+    "split": "development",
+    "category": "exchange-confirm",
+    "history": [
+      {
+        "role": "user",
+        "content": "想把M号换L号"
+      },
+      {
+        "role": "assistant",
+        "content": "确认替您提交M换L的换货申请吗？"
+      }
+    ],
+    "text": "确定，提交换货",
+    "expected_intent": "exchange",
+    "rationale": "上条询问唯一换货方案，本轮明确确认。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-05-2",
+    "group": "intent-exchange-confirm",
+    "split": "development",
+    "category": "exchange-confirm",
+    "history": [
+      {
+        "role": "user",
+        "content": "想把M号换L号"
+      },
+      {
+        "role": "assistant",
+        "content": "确认替您提交M换L的换货申请吗？"
+      }
+    ],
+    "text": "可以，就按M换L办理",
+    "expected_intent": "exchange",
+    "rationale": "上条询问唯一换货方案，本轮明确确认。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-05-3",
+    "group": "intent-exchange-confirm",
+    "split": "development",
+    "category": "exchange-confirm",
+    "history": [
+      {
+        "role": "user",
+        "content": "想把M号换L号"
+      },
+      {
+        "role": "assistant",
+        "content": "确认替您提交M换L的换货申请吗？"
+      }
+    ],
+    "text": "同意这次更换申请，帮我提交",
+    "expected_intent": "exchange",
+    "rationale": "上条询问唯一换货方案，本轮明确确认。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-06-1",
+    "group": "intent-english-exchange",
+    "split": "development",
+    "category": "english-exchange",
+    "history": [],
+    "text": "Please request a replacement of the same model.",
+    "expected_intent": "exchange",
+    "rationale": "英文明确委托换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-06-2",
+    "group": "intent-english-exchange",
+    "split": "development",
+    "category": "english-exchange",
+    "history": [],
+    "text": "Exchange this shirt for size L, please.",
+    "expected_intent": "exchange",
+    "rationale": "英文明确委托换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-06-3",
+    "group": "intent-english-exchange",
+    "split": "development",
+    "category": "english-exchange",
+    "history": [],
+    "text": "Go ahead with the exchange rather than a refund.",
+    "expected_intent": "exchange",
+    "rationale": "英文明确委托换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-07-1",
+    "group": "intent-exchange-after-eligibility",
+    "split": "evaluation",
+    "category": "exchange-after-eligibility",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "订单符合当前换货申请条件，仍需人工审核。"
+      }
+    ],
+    "text": "那就帮我提交换货吧",
+    "expected_intent": "exchange",
+    "rationale": "核验后明确委托建换货单，不表示审批通过。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-07-2",
+    "group": "intent-exchange-after-eligibility",
+    "split": "evaluation",
+    "category": "exchange-after-eligibility",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "订单符合当前换货申请条件，仍需人工审核。"
+      }
+    ],
+    "text": "按同型号更换来申请",
+    "expected_intent": "exchange",
+    "rationale": "核验后明确委托建换货单，不表示审批通过。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-07-3",
+    "group": "intent-exchange-after-eligibility",
+    "split": "evaluation",
+    "category": "exchange-after-eligibility",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "订单符合当前换货申请条件，仍需人工审核。"
+      }
+    ],
+    "text": "可以，替我发起更换商品的申请",
+    "expected_intent": "exchange",
+    "rationale": "核验后明确委托建换货单，不表示审批通过。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-08-1",
+    "group": "intent-exchange-after-hold",
+    "split": "evaluation",
+    "category": "exchange-after-hold",
+    "history": [
+      {
+        "role": "user",
+        "content": "我暂时不换"
+      },
+      {
+        "role": "assistant",
+        "content": "好的，先保留商品。"
+      }
+    ],
+    "text": "现在考虑好了，替我申请换同款",
+    "expected_intent": "exchange",
+    "rationale": "重新明确委托换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-08-2",
+    "group": "intent-exchange-after-hold",
+    "split": "evaluation",
+    "category": "exchange-after-hold",
+    "history": [
+      {
+        "role": "user",
+        "content": "我暂时不换"
+      },
+      {
+        "role": "assistant",
+        "content": "好的，先保留商品。"
+      }
+    ],
+    "text": "还是换吧，请帮我提交申请",
+    "expected_intent": "exchange",
+    "rationale": "重新明确委托换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-08-3",
+    "group": "intent-exchange-after-hold",
+    "split": "evaluation",
+    "category": "exchange-after-hold",
+    "history": [
+      {
+        "role": "user",
+        "content": "我暂时不换"
+      },
+      {
+        "role": "assistant",
+        "content": "好的，先保留商品。"
+      }
+    ],
+    "text": "刚才暂停的换货，现在办理",
+    "expected_intent": "exchange",
+    "rationale": "重新明确委托换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-09-1",
+    "group": "intent-quality-clothing",
+    "split": "evaluation",
+    "category": "quality-clothing",
+    "history": [],
+    "text": "袖口有开线，请替我申请换同款衣服",
+    "expected_intent": "exchange",
+    "rationale": "衣服质量问题属于换货，不是自动退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-09-2",
+    "group": "intent-quality-clothing",
+    "split": "evaluation",
+    "category": "quality-clothing",
+    "history": [],
+    "text": "衣服收到就破了，帮我发起质量换货",
+    "expected_intent": "exchange",
+    "rationale": "衣服质量问题属于换货，不是自动退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-09-3",
+    "group": "intent-quality-clothing",
+    "split": "evaluation",
+    "category": "quality-clothing",
+    "history": [],
+    "text": "这件T恤有破损，我要你帮我更换一件",
+    "expected_intent": "exchange",
+    "rationale": "衣服质量问题属于换货，不是自动退款。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-10-1",
+    "group": "intent-one-of-two-products",
+    "split": "evaluation",
+    "category": "one-of-two-products",
+    "history": [],
+    "text": "耳机保留，只帮我给衣服申请换码",
+    "expected_intent": "exchange",
+    "rationale": "具体订单待核验，当前唯一业务类型为换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-10-2",
+    "group": "intent-one-of-two-products",
+    "split": "evaluation",
+    "category": "one-of-two-products",
+    "history": [],
+    "text": "两单里面只把衣服那单换大一号",
+    "expected_intent": "exchange",
+    "rationale": "具体订单待核验，当前唯一业务类型为换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-10-3",
+    "group": "intent-one-of-two-products",
+    "split": "evaluation",
+    "category": "one-of-two-products",
+    "history": [],
+    "text": "只更换1005的耳机，另外一笔别动",
+    "expected_intent": "exchange",
+    "rationale": "具体订单待核验，当前唯一业务类型为换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-11-1",
+    "group": "intent-exchange-new-after-cancel",
+    "split": "evaluation",
+    "category": "exchange-new-after-cancel",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "之前的换货已取消，可以重新核实申请条件。"
+      }
+    ],
+    "text": "请重新替我发起换货申请",
+    "expected_intent": "exchange",
+    "rationale": "重新申请条件由业务服务判断。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-11-2",
+    "group": "intent-exchange-new-after-cancel",
+    "split": "evaluation",
+    "category": "exchange-new-after-cancel",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "之前的换货已取消，可以重新核实申请条件。"
+      }
+    ],
+    "text": "我还是要换同型号，帮我再提交一次",
+    "expected_intent": "exchange",
+    "rationale": "重新申请条件由业务服务判断。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-11-3",
+    "group": "intent-exchange-new-after-cancel",
+    "split": "evaluation",
+    "category": "exchange-new-after-cancel",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "之前的换货已取消，可以重新核实申请条件。"
+      }
+    ],
+    "text": "重新申请M换L吧，麻烦你处理",
+    "expected_intent": "exchange",
+    "rationale": "重新申请条件由业务服务判断。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-12-1",
+    "group": "intent-exchange-colloquial",
+    "split": "evaluation",
+    "category": "exchange-colloquial",
+    "history": [],
+    "text": "这个太小了，给我换大一号呗",
+    "expected_intent": "exchange",
+    "rationale": "口语表达含明确更换委托。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-12-2",
+    "group": "intent-exchange-colloquial",
+    "split": "evaluation",
+    "category": "exchange-colloquial",
+    "history": [],
+    "text": "这副不太行，麻烦换个一样的新的",
+    "expected_intent": "exchange",
+    "rationale": "口语表达含明确更换委托。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-12-3",
+    "group": "intent-exchange-colloquial",
+    "split": "evaluation",
+    "category": "exchange-colloquial",
+    "history": [],
+    "text": "尺码不对劲，替我办个换码吧",
+    "expected_intent": "exchange",
+    "rationale": "口语表达含明确更换委托。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-13-1",
+    "group": "intent-exchange-with-evidence",
+    "split": "evaluation",
+    "category": "exchange-with-evidence",
+    "history": [],
+    "text": "故障描述我写好了，帮我提交同款换货",
+    "expected_intent": "exchange",
+    "rationale": "材料已准备与提交委托同时存在。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-13-2",
+    "group": "intent-exchange-with-evidence",
+    "split": "evaluation",
+    "category": "exchange-with-evidence",
+    "history": [],
+    "text": "已经拍好开线的位置了，替我申请更换",
+    "expected_intent": "exchange",
+    "rationale": "材料已准备与提交委托同时存在。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-13-3",
+    "group": "intent-exchange-with-evidence",
+    "split": "evaluation",
+    "category": "exchange-with-evidence",
+    "history": [],
+    "text": "材料我准备好了，发起这次换货吧",
+    "expected_intent": "exchange",
+    "rationale": "材料已准备与提交委托同时存在。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-14-1",
+    "group": "intent-exchange-after-consult",
+    "split": "evaluation",
+    "category": "exchange-after-consult",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "可以先取消配对，再重新连接复测。"
+      }
+    ],
+    "text": "复测还是断连，帮我申请换一副",
+    "expected_intent": "exchange",
+    "rationale": "从排查咨询转为换货申请。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-14-2",
+    "group": "intent-exchange-after-consult",
+    "split": "evaluation",
+    "category": "exchange-after-consult",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "可以先取消配对，再重新连接复测。"
+      }
+    ],
+    "text": "我已经试过那些步骤，替我走换货申请",
+    "expected_intent": "exchange",
+    "rationale": "从排查咨询转为换货申请。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-14-3",
+    "group": "intent-exchange-after-consult",
+    "split": "evaluation",
+    "category": "exchange-after-consult",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "可以先取消配对，再重新连接复测。"
+      }
+    ],
+    "text": "没解决，给我办同型号更换",
+    "expected_intent": "exchange",
+    "rationale": "从排查咨询转为换货申请。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-15-1",
+    "group": "intent-exchange-specific-target",
+    "split": "evaluation",
+    "category": "exchange-specific-target",
+    "history": [],
+    "text": "请把这件L码替换成M码，提交换货申请",
+    "expected_intent": "exchange",
+    "rationale": "目标尺码明确，申请与库存承诺分开。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-15-2",
+    "group": "intent-exchange-specific-target",
+    "split": "evaluation",
+    "category": "exchange-specific-target",
+    "history": [],
+    "text": "我选XL，麻烦发起这单的换码",
+    "expected_intent": "exchange",
+    "rationale": "目标尺码明确，申请与库存承诺分开。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-15-3",
+    "group": "intent-exchange-specific-target",
+    "split": "evaluation",
+    "category": "exchange-specific-target",
+    "history": [],
+    "text": "目标尺码就是S，替我办理更换",
+    "expected_intent": "exchange",
+    "rationale": "目标尺码明确，申请与库存承诺分开。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-16-1",
+    "group": "intent-exchange-short-ack",
+    "split": "evaluation",
+    "category": "exchange-short-ack",
+    "history": [
+      {
+        "role": "user",
+        "content": "我选换货"
+      },
+      {
+        "role": "assistant",
+        "content": "要现在替您提交换货申请吗？"
+      }
+    ],
+    "text": "行，提交申请",
+    "expected_intent": "exchange",
+    "rationale": "简短委托承接唯一换货申请。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-16-2",
+    "group": "intent-exchange-short-ack",
+    "split": "evaluation",
+    "category": "exchange-short-ack",
+    "history": [
+      {
+        "role": "user",
+        "content": "我选换货"
+      },
+      {
+        "role": "assistant",
+        "content": "要现在替您提交换货申请吗？"
+      }
+    ],
+    "text": "就这么换，办吧",
+    "expected_intent": "exchange",
+    "rationale": "简短委托承接唯一换货申请。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-16-3",
+    "group": "intent-exchange-short-ack",
+    "split": "evaluation",
+    "category": "exchange-short-ack",
+    "history": [
+      {
+        "role": "user",
+        "content": "我选换货"
+      },
+      {
+        "role": "assistant",
+        "content": "要现在替您提交换货申请吗？"
+      }
+    ],
+    "text": "好，帮我发起吧",
+    "expected_intent": "exchange",
+    "rationale": "简短委托承接唯一换货申请。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-17-1",
+    "group": "intent-exchange-other-order",
+    "split": "evaluation",
+    "category": "exchange-other-order",
+    "history": [],
+    "text": "把朋友这笔订单申请更换同型号",
+    "expected_intent": "exchange",
+    "rationale": "换货意图与客户归属权限分开，业务层应拒绝越权。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-17-2",
+    "group": "intent-exchange-other-order",
+    "split": "evaluation",
+    "category": "exchange-other-order",
+    "history": [],
+    "text": "ORD-OTHER-9002帮我换货",
+    "expected_intent": "exchange",
+    "rationale": "换货意图与客户归属权限分开，业务层应拒绝越权。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-17-3",
+    "group": "intent-exchange-other-order",
+    "split": "evaluation",
+    "category": "exchange-other-order",
+    "history": [],
+    "text": "我知道不是我的订单，也请替我提交换货",
+    "expected_intent": "exchange",
+    "rationale": "换货意图与客户归属权限分开，业务层应拒绝越权。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-18-1",
+    "group": "intent-exchange-policy-not-authority",
+    "split": "evaluation",
+    "category": "exchange-policy-not-authority",
+    "history": [],
+    "text": "已经过了三十天，但我想让你替我申请换货",
+    "expected_intent": "exchange",
+    "rationale": "识别用户请求，实际资格另行按规则拒绝。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-18-2",
+    "group": "intent-exchange-policy-not-authority",
+    "split": "evaluation",
+    "category": "exchange-policy-not-authority",
+    "history": [],
+    "text": "清仓那件衣服请帮我提交换码",
+    "expected_intent": "exchange",
+    "rationale": "识别用户请求，实际资格另行按规则拒绝。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-18-3",
+    "group": "intent-exchange-policy-not-authority",
+    "split": "evaluation",
+    "category": "exchange-policy-not-authority",
+    "history": [],
+    "text": "还没妥投，我也要你帮我申请更换",
+    "expected_intent": "exchange",
+    "rationale": "识别用户请求，实际资格另行按规则拒绝。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-19-1",
+    "group": "intent-exchange-with-order-lookup",
+    "split": "evaluation",
+    "category": "exchange-with-order-lookup",
+    "history": [],
+    "text": "核对我买的型号后帮我发起同型号换货",
+    "expected_intent": "exchange",
+    "rationale": "查询作为前置，不改变明确换货委托。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-19-2",
+    "group": "intent-exchange-with-order-lookup",
+    "split": "evaluation",
+    "category": "exchange-with-order-lookup",
+    "history": [],
+    "text": "先找到昨天的衣服订单，然后提交M换L申请",
+    "expected_intent": "exchange",
+    "rationale": "查询作为前置，不改变明确换货委托。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-19-3",
+    "group": "intent-exchange-with-order-lookup",
+    "split": "evaluation",
+    "category": "exchange-with-order-lookup",
+    "history": [],
+    "text": "查询一下单号，并替我办理这次更换",
+    "expected_intent": "exchange",
+    "rationale": "查询作为前置，不改变明确换货委托。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-20-1",
+    "group": "intent-exchange-not-refund",
+    "split": "evaluation",
+    "category": "exchange-not-refund",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "也可以选择退款。"
+      }
+    ],
+    "text": "我就选换货，请你提交，钱不用退",
+    "expected_intent": "exchange",
+    "rationale": "明确排除退款并选择换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-20-2",
+    "group": "intent-exchange-not-refund",
+    "split": "evaluation",
+    "category": "exchange-not-refund",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "也可以选择退款。"
+      }
+    ],
+    "text": "退款方案不要，替我换同款就好",
+    "expected_intent": "exchange",
+    "rationale": "明确排除退款并选择换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-EXCHANGE-20-3",
+    "group": "intent-exchange-not-refund",
+    "split": "evaluation",
+    "category": "exchange-not-refund",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "也可以选择退款。"
+      }
+    ],
+    "text": "保留购买，只帮我办理商品更换",
+    "expected_intent": "exchange",
+    "rationale": "明确排除退款并选择换货。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-01-1",
+    "group": "intent-both-acceptable",
+    "split": "development",
+    "category": "both-acceptable",
+    "history": [],
+    "text": "退钱或换同款都可以，你看着办",
+    "expected_intent": "clarify",
+    "rationale": "已要求办理，但两种业务仍未选择。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-01-2",
+    "group": "intent-both-acceptable",
+    "split": "development",
+    "category": "both-acceptable",
+    "history": [],
+    "text": "退款和换货我都能接受，帮我处理一下",
+    "expected_intent": "clarify",
+    "rationale": "已要求办理，但两种业务仍未选择。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-01-3",
+    "group": "intent-both-acceptable",
+    "split": "development",
+    "category": "both-acceptable",
+    "history": [],
+    "text": "给我办理售后吧，退或者换都成",
+    "expected_intent": "clarify",
+    "rationale": "已要求办理，但两种业务仍未选择。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-02-1",
+    "group": "intent-uncertain-decision",
+    "split": "development",
+    "category": "uncertain-decision",
+    "history": [],
+    "text": "我想申请售后，退款还是换货还没想好",
+    "expected_intent": "clarify",
+    "rationale": "办理明确，操作类型未定。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-02-2",
+    "group": "intent-uncertain-decision",
+    "split": "development",
+    "category": "uncertain-decision",
+    "history": [],
+    "text": "要办理，但退钱和更换我拿不定主意",
+    "expected_intent": "clarify",
+    "rationale": "办理明确，操作类型未定。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-02-3",
+    "group": "intent-uncertain-decision",
+    "split": "development",
+    "category": "uncertain-decision",
+    "history": [],
+    "text": "帮我处理这单，具体退还是换我还纠结",
+    "expected_intent": "clarify",
+    "rationale": "办理明确，操作类型未定。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-03-1",
+    "group": "intent-both-offered-ack",
+    "split": "development",
+    "category": "both-offered-ack",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "这笔订单您选择退款还是换同款？"
+      }
+    ],
+    "text": "嗯，好啊",
+    "expected_intent": "clarify",
+    "rationale": "上条有两个方案，短确认没有选定其中之一。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-03-2",
+    "group": "intent-both-offered-ack",
+    "split": "development",
+    "category": "both-offered-ack",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "这笔订单您选择退款还是换同款？"
+      }
+    ],
+    "text": "都可以，麻烦处理",
+    "expected_intent": "clarify",
+    "rationale": "上条有两个方案，短确认没有选定其中之一。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-03-3",
+    "group": "intent-both-offered-ack",
+    "split": "development",
+    "category": "both-offered-ack",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "这笔订单您选择退款还是换同款？"
+      }
+    ],
+    "text": "行，就按你说的办",
+    "expected_intent": "clarify",
+    "rationale": "上条有两个方案，短确认没有选定其中之一。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-04-1",
+    "group": "intent-ask-agent-to-choose",
+    "split": "development",
+    "category": "ask-agent-to-choose",
+    "history": [],
+    "text": "你替我决定退货退款还是换新的，然后帮我办",
+    "expected_intent": "clarify",
+    "rationale": "用户要求代选，分类器应保留待澄清。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-04-2",
+    "group": "intent-ask-agent-to-choose",
+    "split": "development",
+    "category": "ask-agent-to-choose",
+    "history": [],
+    "text": "售后方案你选吧，给我退款或换货都行",
+    "expected_intent": "clarify",
+    "rationale": "用户要求代选，分类器应保留待澄清。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-04-3",
+    "group": "intent-ask-agent-to-choose",
+    "split": "development",
+    "category": "ask-agent-to-choose",
+    "history": [],
+    "text": "反正给我处理好，退钱还是更换由你定",
+    "expected_intent": "clarify",
+    "rationale": "用户要求代选，分类器应保留待澄清。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-05-1",
+    "group": "intent-refund-or-size",
+    "split": "development",
+    "category": "refund-or-size",
+    "history": [],
+    "text": "这件衣服要么退款要么换L码，替我处理吧",
+    "expected_intent": "clarify",
+    "rationale": "退款与尺码换货都在候选中。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-05-2",
+    "group": "intent-refund-or-size",
+    "split": "development",
+    "category": "refund-or-size",
+    "history": [],
+    "text": "给我办退款或换大一码，我还没选",
+    "expected_intent": "clarify",
+    "rationale": "退款与尺码换货都在候选中。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-05-3",
+    "group": "intent-refund-or-size",
+    "split": "development",
+    "category": "refund-or-size",
+    "history": [],
+    "text": "退钱也行换码也行，帮我走售后",
+    "expected_intent": "clarify",
+    "rationale": "退款与尺码换货都在候选中。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-06-1",
+    "group": "intent-english-options",
+    "split": "development",
+    "category": "english-options",
+    "history": [],
+    "text": "Please handle it, either a refund or a replacement is fine.",
+    "expected_intent": "clarify",
+    "rationale": "英文办理诉求未选具体操作。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-06-2",
+    "group": "intent-english-options",
+    "split": "development",
+    "category": "english-options",
+    "history": [],
+    "text": "I want after-sales service but have not chosen refund versus exchange.",
+    "expected_intent": "clarify",
+    "rationale": "英文办理诉求未选具体操作。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-06-3",
+    "group": "intent-english-options",
+    "split": "development",
+    "category": "english-options",
+    "history": [],
+    "text": "You pick a refund or an exchange and process it for me.",
+    "expected_intent": "clarify",
+    "rationale": "英文办理诉求未选具体操作。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-07-1",
+    "group": "intent-withdraw-previous-choice",
+    "split": "evaluation",
+    "category": "withdraw-previous-choice",
+    "history": [
+      {
+        "role": "user",
+        "content": "原先说退款"
+      },
+      {
+        "role": "assistant",
+        "content": "请确认最终选择。"
+      }
+    ],
+    "text": "我又犹豫了，退或者换都行，你处理吧",
+    "expected_intent": "clarify",
+    "rationale": "当前撤回单一选择，重新变为两种方案未定。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-07-2",
+    "group": "intent-withdraw-previous-choice",
+    "split": "evaluation",
+    "category": "withdraw-previous-choice",
+    "history": [
+      {
+        "role": "user",
+        "content": "原先说退款"
+      },
+      {
+        "role": "assistant",
+        "content": "请确认最终选择。"
+      }
+    ],
+    "text": "刚才退款先不算，换货也可以，帮我定一下",
+    "expected_intent": "clarify",
+    "rationale": "当前撤回单一选择，重新变为两种方案未定。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-07-3",
+    "group": "intent-withdraw-previous-choice",
+    "split": "evaluation",
+    "category": "withdraw-previous-choice",
+    "history": [
+      {
+        "role": "user",
+        "content": "原先说退款"
+      },
+      {
+        "role": "assistant",
+        "content": "请确认最终选择。"
+      }
+    ],
+    "text": "之前选的作废，现在退款换货你替我挑",
+    "expected_intent": "clarify",
+    "rationale": "当前撤回单一选择，重新变为两种方案未定。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-08-1",
+    "group": "intent-materials-without-action-choice",
+    "split": "evaluation",
+    "category": "materials-without-action-choice",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "您希望退款还是更换商品？"
+      }
+    ],
+    "text": "照片和描述都给你了，你看退还是换",
+    "expected_intent": "clarify",
+    "rationale": "材料齐全无法替代业务类型确认。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-08-2",
+    "group": "intent-materials-without-action-choice",
+    "split": "evaluation",
+    "category": "materials-without-action-choice",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "您希望退款还是更换商品？"
+      }
+    ],
+    "text": "资料齐了，帮我办理，方案我没定",
+    "expected_intent": "clarify",
+    "rationale": "材料齐全无法替代业务类型确认。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-08-3",
+    "group": "intent-materials-without-action-choice",
+    "split": "evaluation",
+    "category": "materials-without-action-choice",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "您希望退款还是更换商品？"
+      }
+    ],
+    "text": "材料已经补完，退钱或换新的你安排",
+    "expected_intent": "clarify",
+    "rationale": "材料齐全无法替代业务类型确认。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-09-1",
+    "group": "intent-repeat-both-question",
+    "split": "evaluation",
+    "category": "repeat-both-question",
+    "history": [
+      {
+        "role": "user",
+        "content": "我要办售后"
+      },
+      {
+        "role": "assistant",
+        "content": "请选退款或者换货。"
+      }
+    ],
+    "text": "都可以啊，你处理",
+    "expected_intent": "clarify",
+    "rationale": "重复表达都可以，仍然没有选定操作。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-09-2",
+    "group": "intent-repeat-both-question",
+    "split": "evaluation",
+    "category": "repeat-both-question",
+    "history": [
+      {
+        "role": "user",
+        "content": "我要办售后"
+      },
+      {
+        "role": "assistant",
+        "content": "请选退款或者换货。"
+      }
+    ],
+    "text": "两个都行，办一个吧",
+    "expected_intent": "clarify",
+    "rationale": "重复表达都可以，仍然没有选定操作。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-09-3",
+    "group": "intent-repeat-both-question",
+    "split": "evaluation",
+    "category": "repeat-both-question",
+    "history": [
+      {
+        "role": "user",
+        "content": "我要办售后"
+      },
+      {
+        "role": "assistant",
+        "content": "请选退款或者换货。"
+      }
+    ],
+    "text": "随便哪种，帮我办就好",
+    "expected_intent": "clarify",
+    "rationale": "重复表达都可以，仍然没有选定操作。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-10-1",
+    "group": "intent-multiple-order-one-unclear",
+    "split": "evaluation",
+    "category": "multiple-order-one-unclear",
+    "history": [],
+    "text": "这笔订单替我处理，退钱还是换货都可接受",
+    "expected_intent": "clarify",
+    "rationale": "订单可能明确，业务类型仍不明确。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-10-2",
+    "group": "intent-multiple-order-one-unclear",
+    "split": "evaluation",
+    "category": "multiple-order-one-unclear",
+    "history": [],
+    "text": "帮我给1001办售后，退款换新我没选",
+    "expected_intent": "clarify",
+    "rationale": "订单可能明确，业务类型仍不明确。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-10-3",
+    "group": "intent-multiple-order-one-unclear",
+    "split": "evaluation",
+    "category": "multiple-order-one-unclear",
+    "history": [],
+    "text": "昨天那单退或换都行，你帮我弄",
+    "expected_intent": "clarify",
+    "rationale": "订单可能明确，业务类型仍不明确。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-11-1",
+    "group": "intent-alternative-confirm",
+    "split": "evaluation",
+    "category": "alternative-confirm",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "可以退款，也可以申请换同款，您选一个。"
+      }
+    ],
+    "text": "确认，给我处理吧",
+    "expected_intent": "clarify",
+    "rationale": "通用确认未指向唯一业务类型。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-11-2",
+    "group": "intent-alternative-confirm",
+    "split": "evaluation",
+    "category": "alternative-confirm",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "可以退款，也可以申请换同款，您选一个。"
+      }
+    ],
+    "text": "好的，麻烦提交申请",
+    "expected_intent": "clarify",
+    "rationale": "通用确认未指向唯一业务类型。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-11-3",
+    "group": "intent-alternative-confirm",
+    "split": "evaluation",
+    "category": "alternative-confirm",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "可以退款，也可以申请换同款，您选一个。"
+      }
+    ],
+    "text": "同意，开始办理吧",
+    "expected_intent": "clarify",
+    "rationale": "通用确认未指向唯一业务类型。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-12-1",
+    "group": "intent-question-with-application",
+    "split": "evaluation",
+    "category": "question-with-application",
+    "history": [],
+    "text": "能不能替我办理一下，退款或者换货都可以",
+    "expected_intent": "clarify",
+    "rationale": "礼貌问句表达办理，但操作未确定。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-12-2",
+    "group": "intent-question-with-application",
+    "split": "evaluation",
+    "category": "question-with-application",
+    "history": [],
+    "text": "方便帮我办个退或换吗，我都能接受",
+    "expected_intent": "clarify",
+    "rationale": "礼貌问句表达办理，但操作未确定。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-12-3",
+    "group": "intent-question-with-application",
+    "split": "evaluation",
+    "category": "question-with-application",
+    "history": [],
+    "text": "请你处理这单售后，退换两种我没偏好",
+    "expected_intent": "clarify",
+    "rationale": "礼貌问句表达办理，但操作未确定。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-13-1",
+    "group": "intent-defect-with-two-remedies",
+    "split": "evaluation",
+    "category": "defect-with-two-remedies",
+    "history": [],
+    "text": "耳机右侧不响，退钱或换新的都行，帮我申请",
+    "expected_intent": "clarify",
+    "rationale": "故障明确不代表售后操作已明确。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-13-2",
+    "group": "intent-defect-with-two-remedies",
+    "split": "evaluation",
+    "category": "defect-with-two-remedies",
+    "history": [],
+    "text": "断连没解决，给我走退款或换货都可以",
+    "expected_intent": "clarify",
+    "rationale": "故障明确不代表售后操作已明确。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-13-3",
+    "group": "intent-defect-with-two-remedies",
+    "split": "evaluation",
+    "category": "defect-with-two-remedies",
+    "history": [],
+    "text": "耳机坏了，你帮我退或者换一副",
+    "expected_intent": "clarify",
+    "rationale": "故障明确不代表售后操作已明确。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-14-1",
+    "group": "intent-clothing-two-remedies",
+    "split": "evaluation",
+    "category": "clothing-two-remedies",
+    "history": [],
+    "text": "衣服开线了，替我退钱或更换都行",
+    "expected_intent": "clarify",
+    "rationale": "衣服问题与退款换货二选一仍需澄清。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-14-2",
+    "group": "intent-clothing-two-remedies",
+    "split": "evaluation",
+    "category": "clothing-two-remedies",
+    "history": [],
+    "text": "尺寸太紧了，退款或换大号我都可以，帮我办",
+    "expected_intent": "clarify",
+    "rationale": "衣服问题与退款换货二选一仍需澄清。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-14-3",
+    "group": "intent-clothing-two-remedies",
+    "split": "evaluation",
+    "category": "clothing-two-remedies",
+    "history": [],
+    "text": "T恤不满意，办退款还是换货你定",
+    "expected_intent": "clarify",
+    "rationale": "衣服问题与退款换货二选一仍需澄清。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-15-1",
+    "group": "intent-after-policy-still-undecided",
+    "split": "evaluation",
+    "category": "after-policy-still-undecided",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "已说明退款和换货的规则。"
+      }
+    ],
+    "text": "规则明白了，还是两种都行，你帮我办",
+    "expected_intent": "clarify",
+    "rationale": "了解政策之后仍未选业务类型。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-15-2",
+    "group": "intent-after-policy-still-undecided",
+    "split": "evaluation",
+    "category": "after-policy-still-undecided",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "已说明退款和换货的规则。"
+      }
+    ],
+    "text": "现在给我提交售后，但退换我还没有决定",
+    "expected_intent": "clarify",
+    "rationale": "了解政策之后仍未选业务类型。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-15-3",
+    "group": "intent-after-policy-still-undecided",
+    "split": "evaluation",
+    "category": "after-policy-still-undecided",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "已说明退款和换货的规则。"
+      }
+    ],
+    "text": "我同意走售后，选退款还是更换你看吧",
+    "expected_intent": "clarify",
+    "rationale": "了解政策之后仍未选业务类型。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-16-1",
+    "group": "intent-short-options-context",
+    "split": "evaluation",
+    "category": "short-options-context",
+    "history": [
+      {
+        "role": "user",
+        "content": "这笔订单要处理"
+      },
+      {
+        "role": "assistant",
+        "content": "退钱还是换货，您希望哪一种？"
+      }
+    ],
+    "text": "你安排就好",
+    "expected_intent": "clarify",
+    "rationale": "短句必须结合最近的双选项上下文。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-16-2",
+    "group": "intent-short-options-context",
+    "split": "evaluation",
+    "category": "short-options-context",
+    "history": [
+      {
+        "role": "user",
+        "content": "这笔订单要处理"
+      },
+      {
+        "role": "assistant",
+        "content": "退钱还是换货，您希望哪一种？"
+      }
+    ],
+    "text": "办哪个都行",
+    "expected_intent": "clarify",
+    "rationale": "短句必须结合最近的双选项上下文。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-16-3",
+    "group": "intent-short-options-context",
+    "split": "evaluation",
+    "category": "short-options-context",
+    "history": [
+      {
+        "role": "user",
+        "content": "这笔订单要处理"
+      },
+      {
+        "role": "assistant",
+        "content": "退钱还是换货，您希望哪一种？"
+      }
+    ],
+    "text": "都能接受，提交吧",
+    "expected_intent": "clarify",
+    "rationale": "短句必须结合最近的双选项上下文。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-17-1",
+    "group": "intent-switching-not-final",
+    "split": "evaluation",
+    "category": "switching-not-final",
+    "history": [
+      {
+        "role": "user",
+        "content": "先说想换货"
+      },
+      {
+        "role": "assistant",
+        "content": "确定按换货申请吗？"
+      }
+    ],
+    "text": "也许退款更合适，你帮我从两种里选一个办",
+    "expected_intent": "clarify",
+    "rationale": "当前表达重新打开两种选项，旧换货选择不直接延续。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-17-2",
+    "group": "intent-switching-not-final",
+    "split": "evaluation",
+    "category": "switching-not-final",
+    "history": [
+      {
+        "role": "user",
+        "content": "先说想换货"
+      },
+      {
+        "role": "assistant",
+        "content": "确定按换货申请吗？"
+      }
+    ],
+    "text": "换新的也行，退钱也行，反正帮我处理",
+    "expected_intent": "clarify",
+    "rationale": "当前表达重新打开两种选项，旧换货选择不直接延续。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-17-3",
+    "group": "intent-switching-not-final",
+    "split": "evaluation",
+    "category": "switching-not-final",
+    "history": [
+      {
+        "role": "user",
+        "content": "先说想换货"
+      },
+      {
+        "role": "assistant",
+        "content": "确定按换货申请吗？"
+      }
+    ],
+    "text": "我现在没定是退是换，替我安排售后",
+    "expected_intent": "clarify",
+    "rationale": "当前表达重新打开两种选项，旧换货选择不直接延续。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-18-1",
+    "group": "intent-urgent-but-undecided",
+    "split": "evaluation",
+    "category": "urgent-but-undecided",
+    "history": [],
+    "text": "我很急，退款或者换货随便一种赶紧给我办",
+    "expected_intent": "clarify",
+    "rationale": "紧急程度不构成具体操作选择。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-18-2",
+    "group": "intent-urgent-but-undecided",
+    "split": "evaluation",
+    "category": "urgent-but-undecided",
+    "history": [],
+    "text": "尽快处理这单吧，退钱还是换新我没定",
+    "expected_intent": "clarify",
+    "rationale": "紧急程度不构成具体操作选择。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-18-3",
+    "group": "intent-urgent-but-undecided",
+    "split": "evaluation",
+    "category": "urgent-but-undecided",
+    "history": [],
+    "text": "别再拖了，给我退或换都行",
+    "expected_intent": "clarify",
+    "rationale": "紧急程度不构成具体操作选择。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-19-1",
+    "group": "intent-amount-vs-replacement-choice",
+    "split": "evaluation",
+    "category": "amount-vs-replacement-choice",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "可查询退款金额，也可查看换货条件；最终办理需您选定。"
+      }
+    ],
+    "text": "我就是要办理，退钱或换货都接受",
+    "expected_intent": "clarify",
+    "rationale": "本轮明确办理但未指定业务类型。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-19-2",
+    "group": "intent-amount-vs-replacement-choice",
+    "split": "evaluation",
+    "category": "amount-vs-replacement-choice",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "可查询退款金额，也可查看换货条件；最终办理需您选定。"
+      }
+    ],
+    "text": "给我发起申请吧，两种方案都可以",
+    "expected_intent": "clarify",
+    "rationale": "本轮明确办理但未指定业务类型。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-19-3",
+    "group": "intent-amount-vs-replacement-choice",
+    "split": "evaluation",
+    "category": "amount-vs-replacement-choice",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "可查询退款金额，也可查看换货条件；最终办理需您选定。"
+      }
+    ],
+    "text": "我同意办售后，退款更换二选一你定",
+    "expected_intent": "clarify",
+    "rationale": "本轮明确办理但未指定业务类型。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-20-1",
+    "group": "intent-long-context-two-options",
+    "split": "evaluation",
+    "category": "long-context-two-options",
+    "history": [
+      {
+        "role": "user",
+        "content": "先排查耳机"
+      },
+      {
+        "role": "assistant",
+        "content": "请检查输出设备"
+      },
+      {
+        "role": "user",
+        "content": "试过还是异常"
+      },
+      {
+        "role": "assistant",
+        "content": "您可以考虑退款或换货"
+      },
+      {
+        "role": "user",
+        "content": "我想申请售后"
+      },
+      {
+        "role": "assistant",
+        "content": "确认一下，您最终选退款还是换同型号？"
+      }
+    ],
+    "text": "好的，办吧，你选哪种都行",
+    "expected_intent": "clarify",
+    "rationale": "较长对话的最后问题仍是二选一，不能由旧背景代选。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-20-2",
+    "group": "intent-long-context-two-options",
+    "split": "evaluation",
+    "category": "long-context-two-options",
+    "history": [
+      {
+        "role": "user",
+        "content": "先排查耳机"
+      },
+      {
+        "role": "assistant",
+        "content": "请检查输出设备"
+      },
+      {
+        "role": "user",
+        "content": "试过还是异常"
+      },
+      {
+        "role": "assistant",
+        "content": "您可以考虑退款或换货"
+      },
+      {
+        "role": "user",
+        "content": "我想申请售后"
+      },
+      {
+        "role": "assistant",
+        "content": "确认一下，您最终选退款还是换同型号？"
+      }
+    ],
+    "text": "退或者换没有偏好，替我提交",
+    "expected_intent": "clarify",
+    "rationale": "较长对话的最后问题仍是二选一，不能由旧背景代选。",
+    "origin": "authored"
+  },
+  {
+    "id": "I-CLARIFY-20-3",
+    "group": "intent-long-context-two-options",
+    "split": "evaluation",
+    "category": "long-context-two-options",
+    "history": [
+      {
+        "role": "user",
+        "content": "先排查耳机"
+      },
+      {
+        "role": "assistant",
+        "content": "请检查输出设备"
+      },
+      {
+        "role": "user",
+        "content": "试过还是异常"
+      },
+      {
+        "role": "assistant",
+        "content": "您可以考虑退款或换货"
+      },
+      {
+        "role": "user",
+        "content": "我想申请售后"
+      },
+      {
+        "role": "assistant",
+        "content": "确认一下，您最终选退款还是换同型号？"
+      }
+    ],
+    "text": "两个方案我都同意，帮我处理",
+    "expected_intent": "clarify",
+    "rationale": "较长对话的最后问题仍是二选一，不能由旧背景代选。",
+    "origin": "authored"
+  }
+]

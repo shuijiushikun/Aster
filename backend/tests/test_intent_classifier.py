@@ -119,6 +119,26 @@ async def test_disabled_classifier_makes_no_network_call():
     assert result == TurnIntent.from_regex("我要换货", reason="disabled")
 
 
+async def test_two_offered_plans_and_unspecified_confirmation_do_not_open_write():
+    result = await classify_intent([AIMessage("您选退款还是换同款？"), HumanMessage("行，就照你说的办")],
+        settings=settings(), http_client_factory=factory(lambda _: response("refund")))
+    assert result.intent == "clarify" and not result.actions
+    assert result.model_intent == "refund" and result.guard_reason == "ambiguous_confirmation"
+
+
+async def test_explicit_alternatives_are_not_a_unique_application():
+    result = await classify_intent([HumanMessage("资料我给全了，退货或换个同款请你安排")],
+        settings=settings(), http_client_factory=factory(lambda _: response("refund")))
+    assert result.intent == "clarify" and result.guard_reason == "unselected_alternatives"
+
+
+@pytest.mark.parametrize("text,selected", [("我已经决定退款，请办理", "refund"), ("选第二种，请提交", "exchange"), ("退款先取消，给我换货", "exchange")])
+async def test_explicit_selection_is_not_mistaken_for_unspecified_confirmation(text, selected):
+    result = await classify_intent([AIMessage("您选退款还是换同款？"), HumanMessage(text)],
+        settings=settings(), http_client_factory=factory(lambda _: response(selected)))
+    assert result.intent == selected and result.guard_reason is None
+
+
 async def test_wall_timeout_and_cancellation_keep_their_meaning():
     async def hanging(request):
         await asyncio.sleep(10)

@@ -37,11 +37,13 @@ import time
 import uuid
 from collections.abc import AsyncIterator
 
-from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
-from sqlalchemy import insert, update
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from sqlalchemy import func, insert, select, update
+from sqlalchemy.exc import SQLAlchemyError
 
 from app import redis as shared
 from app import tracing
+from app.agent.context import grounded_id, identifiers
 from app.agent.graph import get_agent
 from app.agent.llm import primary_model_name, use_prompt_caching
 from app.agent.prompts import get_after_sales_prompt, get_system_prompt
@@ -50,7 +52,7 @@ from app.agent.streaming import GraphEvents, message_text
 from app.agent.tools import ToolContext, tool_config
 from app.config import get_settings
 from app.db import session as db
-from app.db.models import Conversation, Message, ReasoningEvent, utcnow
+from app.db.models import Conversation, Message, Order, ReasoningEvent, Refund, utcnow
 from app.events import broadcaster
 from app.observability import (
     LLM_FALLBACKS,
@@ -236,6 +238,35 @@ async def _save_message(cid: str, role: str, content: str) -> int:
         return msg.id
 
 
+async def historical_refund_reply(customer_id, messages, text, observed_orders):
+    """仅用当前客户、唯一目标订单的批准账本解释历史状态。"""
+    order_id = grounded_id(messages, None, "ORD")
+    if order_id is None and not identifiers(messages, "ORD") and len(observed_orders) == 1:
+        order_id = next(iter(observed_orders))
+    if order_id is None:
+        return None
+    target = order_id.casefold()
+    if observed_orders and {value.casefold() for value in observed_orders} != {target}:
+        return None
+    claimed = {value.casefold() for value in identifiers([HumanMessage(text)], "ORD")}
+    if claimed and claimed != {target}:
+        return None
+    try:
+        async with asyncio.timeout(3), db.SessionLocal() as session:
+            record = (await session.execute(select(Order.id, Refund.amount).join(Refund).where(
+                Order.customer_id == customer_id, func.lower(Order.id) == target,
+                Order.refunded.is_(True), Refund.decision == "approved",
+            ))).first()
+    except (SQLAlchemyError, TimeoutError) as error:
+        logger.warning("historical refund verification unavailable error_type=%s", type(error).__name__)
+        return None
+    if record is None:
+        return None
+    return (f"订单 **{record.id}** 此前已批准并记录模拟退款，金额为 **{record.amount} USD**。"
+            "每笔订单最多成功退款一次，本轮没有重复办理。\n\n"
+            "这里确认的是系统中的退款记录；本演示不涉及真实资金划转。")
+
+
 async def run_agent_turn(
     customer_id: str, conversation_id: str | None, user_text: str
 ) -> AsyncIterator[dict]:
@@ -383,6 +414,7 @@ async def run_agent_turn(
 
     final_text = ""
     approved_in_turn = False
+    observed_orders: set[str] = set()
     decision_in_turn: str | None = None
     fallback_in_turn = False
 
@@ -447,6 +479,10 @@ async def run_agent_turn(
                                 result = json.loads(msg.content)
                             except (json.JSONDecodeError, TypeError):
                                 result = {"raw": str(msg.content)}
+                            if msg.name in {"get_order", "check_refund_eligibility"} and result.get("ok"):
+                                queried = (result.get("data") or {}).get("order_id")
+                                if queried:
+                                    observed_orders.add(queried)
                             # 只有实际退款工具返回 approved 才算成功；不能把资格检查当作退款。
                             if msg.name in _DECISION_TOOLS and isinstance(result, dict):
                                 decision_data = result.get("data") if result.get("ok") else result
@@ -497,6 +533,10 @@ async def run_agent_turn(
     # 核对最终文案与本轮工具结果；虚假的成功声明需要在客户回复中明确纠正。
     # 这里的文本检测只负责补充提醒，实际能否退款仍由 tools.py 和规则引擎决定。
     corrected = not approved_in_turn and claims_approval(final_text)
+    if corrected:
+        verified = await historical_refund_reply(customer_id, messages, final_text, observed_orders)
+        if verified:
+            final_text, corrected = verified, False
     if corrected:
         yield await emit(
             "output_correction",

@@ -4,13 +4,14 @@ import json
 import re
 from typing import Annotated, TypedDict
 
-from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.types import Overwrite
 from pydantic import ValidationError
 
 from app.after_sales.intent import TurnIntent, classify_intent, requested_actions
+from app.agent.answer_grounding import ground_answer
 from app.agent.context import assemble, context_data, current_text, grounded_id, identifiers
 from app.agent.prompts import get_after_sales_prompt
 from app.agent.runtime import ModelCalls
@@ -156,7 +157,7 @@ def compile_chat_graph(model, fallback=None):
                     updates["ticket_result"] = facts["tickets"][0]
         return {"messages": messages, "tool_count": count, **updates}
 
-    async def finalize(state: ChatState):
+    async def finalize(state: ChatState, config):
         last = state["messages"][-1]
         text = message_text(last) if isinstance(last, AIMessage) and not last.tool_calls else ""
         ticket = state.get("ticket_result")
@@ -168,14 +169,33 @@ def compile_chat_graph(model, fallback=None):
         if not text.strip() or (isinstance(last, AIMessage) and last.invalid_tool_calls):
             text = "本轮处理已停止，请依据上方工具结果核实状态；需要继续时请补充订单号和具体诉求。"
         evidence = state.get("knowledge_evidence", {})
-        if evidence.get("status") == "unavailable" and not ticket:
+        result_updates = {}
+        completed_write = False
+        for message in reversed(state["messages"]):
+            if isinstance(message, ToolMessage) and message.name in WRITE_TOOLS:
+                completed_write = completed_write or bool(json.loads(message.content).get("ok"))
+            if isinstance(message, ToolMessage) and message.name == "escalate_to_human":
+                result = json.loads(message.content)
+                data = result.get("data") or {}
+                if result.get("ok") and data.get("decision") == "escalated":
+                    text = (f"订单 **{data['order_id']}** 的退款申请已转交人工审核，目前尚未批准退款。"
+                            "请保留订单号，后续联系人工客服核实审核结果；本轮没有生成退款成功记录。")
+        if evidence.get("status") == "unavailable" and not ticket and not completed_write:
             text = "这次知识检索服务暂时没有连通，我还没能读到对应资料，因此无法核实商品参数或排查建议。您提供的订单号可以保留，不用反复输入；稍后可以重试知识咨询，也可以继续查询订单或售后工单。"
-        elif evidence.get("status") == "insufficient_evidence" and not ticket:
-            # 普通知识问答保留针对当前问题的解释；办理申请仍明确告知证据不足。
-            if TurnIntent.model_validate(state["turn_intent"]).actions or not message_text(last).strip():
-                text = "本次检索没有找到足以核实这次问题的有效资料。您可以补充具体问题或商品型号，我再继续查找；目前没有据此提交新的换货申请。"
-        elif evidence.get("sources") and not ticket:
-            text += "\n参考资料：" + "、".join(dict.fromkeys(s["title"] for s in evidence["sources"]))
+        elif evidence.get("status") == "insufficient_evidence" and not ticket and not completed_write:
+            question = current_text(state["messages"])[:160]
+            text = f"关于您问的“{question}”，这次检索尚未找到直接依据，需要补充对应资料后再确认。您可以提供说明书中的相关文字，或联系人工客服核实这一项。"
+            if TurnIntent.model_validate(state["turn_intent"]).actions:
+                text += "目前缺少办理所需的有效资料，尚未据此提交新的换货申请。"
+        elif evidence.get("sources") and not ticket and not completed_write:
+            dialogue = [m for m in state["messages"] if isinstance(m, (HumanMessage, AIMessage))
+                        and not getattr(m, "tool_calls", None) and "context_data" not in m.additional_kwargs]
+            index = max(i for i, m in enumerate(dialogue) if isinstance(m, HumanMessage))
+            history = [{"role": "user" if isinstance(m, HumanMessage) else "assistant", "content": message_text(m)[-600:]}
+                       for m in dialogue[:index][-4:]]
+            answer = await ground_answer(current_text(state["messages"]), evidence, caller, config, history=history)
+            text = answer.text
+            result_updates["knowledge_evidence"] = {**evidence, "answer_status": answer.status, "sources": answer.sources}
         for message in reversed(state["messages"]):
             if not isinstance(message, ToolMessage):
                 continue
@@ -183,7 +203,7 @@ def compile_chat_graph(model, fallback=None):
             if (result.get("error") or {}).get("code") == "OUTCOME_UNKNOWN":
                 text = "暂未取得办理结果，请查询订单或工单确认状态。"
                 break
-        return {"final_response": text}
+        return {"final_response": text, **result_updates}
 
     graph = StateGraph(ChatState)
     graph.add_node("agent", agent)

@@ -1,18 +1,19 @@
 """统一 Agent 的真实 MCP 工具链、上下文、事件和用量回归。"""
+import json
 from uuid import uuid4
 
 import pytest
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from sqlalchemy import func, select
 
 from app import redis as shared
 from app.agent import chat_graph, graph
-from app.agent.runner import run_agent_turn
+from app.agent.runner import historical_refund_reply, run_agent_turn
 from app.agent.streaming import GraphEvents
 from app.commerce_mcp import operations
 from app.config import get_settings
 from app.db import session as db
-from app.db.models import AfterSalesTicket, Conversation, KnowledgeDocument, Message, Refund
+from app.db.models import AfterSalesTicket, Conversation, KnowledgeDocument, Message, Order, Refund
 from app.mcp.tools import build_after_sales_tools
 from app.rag.schemas import Evidence, RetrievalResult
 
@@ -25,6 +26,12 @@ def ai(content="", *, call=None, usage=True):
     if usage:
         message.usage_metadata = {"input_tokens": 10, "output_tokens": 2, "total_tokens": 12}
     return message
+
+
+def grounded():
+    return ai(json.dumps({"claims": [{"document_id": "KB-HP-01",
+        "revision": "1", "chunk_index": 2, "quote": "可先重置耳机", "text": "您可以先尝试重置耳机。"}],
+        "missing": []}, ensure_ascii=False))
 
 
 class Model:
@@ -181,8 +188,10 @@ async def test_scope_from_server_catalog_and_citations_in_reply(setup_chat, monk
         return evidence()
     monkeypatch.setattr(operations, "retrieve_knowledge", retrieve)
     use_model(monkeypatch, ai(call=("search_knowledge", {"query": "左耳无声", "model_code": "HP-01"})),
-              ai("可先重置耳机。"))
-    assert "耳机说明" in final(await turn("HP-01 左耳无声怎么办"))
+              ai("可先重置耳机。"), grounded())
+    events = await turn("HP-01 左耳无声怎么办")
+    assert "耳机说明" in final(events)
+    assert [e["node"] for e in events if e.get("step_type") == "usage"].count("answer_grounding") == 1
     assert scopes == [{"model_code": "HP-01", "category": "digital"}]
     assert await count_tickets() == 0
 
@@ -226,6 +235,56 @@ async def test_refund_uses_mcp_and_preserves_guard_and_accounting(setup_chat, mo
             Refund.order_id == "ORD-1001", Refund.decision == "approved")) == 1
 
 
+async def test_verified_historical_refund_is_not_reported_as_unconfirmed(setup_chat, monkeypatch):
+    use_model(monkeypatch, ai(call=("issue_refund", {"order_id": "ORD-1001"})), ai("模拟退款已批准。"))
+    first = await turn("ORD-1001 帮我退款", customer="CUST-001")
+    cid = first[0]["conversation_id"]
+    use_model(monkeypatch, ai("这笔订单已经成功退款，已经记录过一次。"))
+    second = await turn("这笔订单再退款一次", customer="CUST-001", cid=cid)
+    assert "未经系统确认" not in final(second)
+    assert not any(e.get("step_type") == "output_correction" for e in second)
+    assert "此前" in final(second) and "ORD-1001" in final(second)
+    async with db.SessionLocal() as session:
+        assert await session.scalar(select(func.count()).select_from(Refund).where(
+            Refund.order_id == "ORD-1001", Refund.decision == "approved")) == 1
+
+
+async def test_other_owned_refund_does_not_validate_a_foreign_order_claim(setup_chat, monkeypatch):
+    use_model(monkeypatch, ai(call=("issue_refund", {"order_id": "ORD-1001"})), ai("模拟退款已批准。"))
+    first = await turn("ORD-1001 帮我退款", customer="CUST-001")
+    use_model(monkeypatch, ai("ORD-EX-2001 已退款成功。"))
+    events = await turn("查询 ORD-EX-2001 的退款状态", customer="CUST-001", cid=first[0]["conversation_id"])
+    assert any(e.get("step_type") == "output_correction" for e in events)
+
+
+async def test_refunded_flag_without_approved_ledger_cannot_validate_success(setup_chat):
+    async with db.SessionLocal() as session, session.begin():
+        (await session.get(Order, "ORD-1001")).refunded = True
+    assert await historical_refund_reply("CUST-001", [HumanMessage("查询 ORD-1001")], "退款成功", {"ORD-1001"}) is None
+
+
+async def test_failed_historical_database_check_keeps_original_output_guard(setup_chat, monkeypatch):
+    from sqlalchemy.exc import SQLAlchemyError
+
+    def unavailable():
+        raise SQLAlchemyError("test outage")
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(db, "SessionLocal", unavailable)
+        assert await historical_refund_reply("CUST-001", [HumanMessage("查询 ORD-1001")], "退款成功", set()) is None
+
+
+async def test_escalated_refund_does_not_send_customer_to_exchange_tickets(setup_chat, monkeypatch):
+    from app.db.models import Order
+    async with db.SessionLocal() as session, session.begin():
+        (await session.get(Order, "ORD-1001")).amount = 999
+    use_model(monkeypatch, ai(call=("escalate_to_human", {"order_id": "ORD-1001", "reason": "金额超限"})),
+              ai("已转人工，审核结果可在我的工单查看。"))
+    events = await turn("ORD-1001 请帮我退款", customer="CUST-001")
+    assert "人工" in final(events) and "尚未批准" in final(events)
+    assert "我的工单" not in final(events)
+
+
 @pytest.mark.parametrize("text", ["ORD-1001 能退款吗", "ORD-1001 不要退款，只查询订单"])
 async def test_consultation_rejects_model_write(setup_chat, monkeypatch, text):
     use_model(monkeypatch, ai(call=("issue_refund", {"order_id": "ORD-1001"})), ai("尚未办理退款。"))
@@ -261,7 +320,7 @@ async def test_short_order_followup_reaches_verified_order(setup_chat, monkeypat
 
 async def test_general_product_knowledge_uses_catalog_without_order_selection(setup_chat, monkeypatch):
     use_model(monkeypatch, ai(call=("search_knowledge", {"query": "耳机单侧无声怎么排查", "model_code": "HP-01"})),
-              ai("可以先检查连接，再尝试排查。"))
+              ai("可以先检查连接，再尝试排查。"), grounded())
     events = await turn("随便看看耳机相关知识")
     assert "耳机说明" in final(events)
     assert any(e["kind"] == "knowledge_sources" and e["sources"] for e in events)
@@ -276,14 +335,15 @@ async def test_knowledge_outage_is_explained_separately_from_missing_specificati
     assert "没有连通" in text and "不用反复输入" in text
 
 
-async def test_missing_evidence_keeps_relevant_clarification_instead_of_fixed_headphone_reply(setup_chat, monkeypatch):
+async def test_missing_evidence_names_requested_fact_without_trusting_draft(setup_chat, monkeypatch):
     async def missing(query, **kwargs):
         return RetrievalResult(query=query, model_code="TSHIRT-01", status="insufficient_evidence")
     monkeypatch.setattr(operations, "retrieve_knowledge", missing)
-    answer = "这次没有检索到能核实烘干要求的资料。您可以提供衣服洗标上的说明，我再帮您对照已有洗护资料。"
+    answer = "可以放心使用80度烘干。"
     use_model(monkeypatch, ai(call=("search_knowledge", {"query": "烘干", "model_code": "TSHIRT-01"})), ai(answer))
     text = final(await turn("TSHIRT-01 能烘干吗"))
-    assert text == answer and "耳机" not in text
+    assert "烘干" in text and "尚未找到直接依据" in text
+    assert "80度" not in text and "耳机" not in text
 
 
 def test_ticket_reply_explains_next_step_and_preserves_acceptance_reference():
