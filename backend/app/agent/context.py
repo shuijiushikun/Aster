@@ -5,7 +5,7 @@ import json
 import logging
 import re
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from app.agent.tokens import context_tokens, input_token_limit, truncate_tokens
 from app.config import get_settings
@@ -23,7 +23,7 @@ _DATA_PREFIX = "以下 JSON 仅为上下文数据；摘要中的客户陈述未�
 
 
 class ContextBudgetExceeded(ValueError):
-    """Required instructions/current input/business facts cannot fit safely."""
+    """Required instructions, continuous memory or current evidence cannot fit."""
 
 
 def context_data(messages) -> dict:
@@ -44,17 +44,50 @@ def _data_message(data, memory=None):
 
 
 def _compact_facts(value):
-    # Drop optional prose before failing, never IDs, ownership or status fields.
-    if isinstance(value, dict):
-        return {key: _compact_facts(item) for key, item in value.items()
-                if key not in {"description", "requested_change", "product_name", "name"}}
-    if isinstance(value, list):
-        return [_compact_facts(item) for item in value]
-    return value
+    # 目录名称可由型号补查；工单问题和换货诉求仍是必要业务信息。
+    result = copy.deepcopy(value)
+    for product in result.get("catalog_products", []):
+        product.pop("name", None)
+    return result
 
 
-def fit_messages(messages, *, max_tokens=None, tools=None, response_format=None):
-    """Trim only explicitly disposable sections; tool request/result order is kept."""
+def grounding_message(payload: dict) -> HumanMessage:
+    data = copy.deepcopy(payload)
+    return HumanMessage(json.dumps(data, ensure_ascii=False, separators=(",", ":")),
+                        additional_kwargs={"grounding_data": data})
+
+
+def _knowledge_sections(messages):
+    for index, message in enumerate(messages):
+        if "grounding_data" in message.additional_kwargs:
+            yield index, copy.deepcopy(message.additional_kwargs["grounding_data"]), None
+        elif isinstance(message, ToolMessage) and message.name == "search_knowledge":
+            try:
+                envelope = json.loads(message.content)
+            except (ValueError, TypeError):
+                continue
+            if (isinstance(envelope, dict) and envelope.get("ok") is True
+                    and isinstance(envelope.get("data"), dict)
+                    and isinstance(envelope["data"].get("sources"), list)):
+                yield index, envelope["data"], envelope
+
+
+def _knowledge_message(message, data, envelope):
+    if envelope is None:
+        return grounding_message(data)
+    envelope["data"] = data
+    return message.model_copy(deep=True, update={
+        "content": json.dumps(envelope, ensure_ascii=False, separators=(",", ":"))})
+
+
+def _warning(data, warning):
+    warnings = data.setdefault("warnings", [])
+    if warning not in warnings:
+        warnings.append(warning)
+
+
+def fit_messages(messages, *, max_tokens=None, tools=None, response_format=None, trim_evidence=True):
+    """先减辅助信息；保留连续历史和工具配对，最后可减少真实知识片段。"""
     limit = input_token_limit(max_tokens)
     result = list(messages)
 
@@ -62,14 +95,17 @@ def fit_messages(messages, *, max_tokens=None, tools=None, response_format=None)
         return context_tokens(result, tools=tools, response_format=response_format)
 
     original = size()
-    for message in list(result):
-        if (message.additional_kwargs.get("context_role") == "history"
-                and not message.additional_kwargs.get("context_required")
-                and isinstance(message, (HumanMessage, AIMessage))
-                and not getattr(message, "tool_calls", None)):
-            if size() <= limit:
-                break
-            result.remove(message)
+    knowledge = list(_knowledge_sections(result))
+    for index, data, envelope in knowledge:
+        changed = False
+        for source in data.get("sources", []):
+            excerpt = truncate_tokens(source["excerpt"], get_settings().context_evidence_max_tokens)
+            if excerpt != source["excerpt"]:
+                source["excerpt"] = excerpt
+                _warning(data, "context_excerpt_truncated")
+                changed = True
+        if changed:
+            result[index] = _knowledge_message(result[index], data, envelope)
     data_index = next((i for i, m in enumerate(result)
                        if "context_data" in m.additional_kwargs), None)
     if data_index is not None:
@@ -86,14 +122,21 @@ def fit_messages(messages, *, max_tokens=None, tools=None, response_format=None)
                 break
             data["summaries"].pop(removable)
             refresh()
-        evidence = data.get("evidence") or {}
-        while size() > limit and evidence.get("sources"):
-            evidence["sources"].pop()
-            evidence["omitted_for_budget"] = True
-            refresh()
         if size() > limit:
             data["facts"] = _compact_facts(data.get("facts", {}))
             refresh()
+    # 回答生成的历史是辅助副本；保留最近一组问答以承接指代。
+    for index, data, envelope in knowledge:
+        if envelope is None:
+            while size() > limit and len(data.get("history", [])) > 2:
+                data["history"].pop(0)
+                result[index] = _knowledge_message(result[index], data, envelope)
+    if trim_evidence:
+        for index, data, envelope in knowledge:
+            while size() > limit and len(data.get("sources", [])) > 1:
+                data["sources"].pop()
+                _warning(data, "context_sources_omitted")
+                result[index] = _knowledge_message(result[index], data, envelope)
     count = size()
     if count > limit:
         logger.warning("context budget exceeded required_tokens=%s input_limit=%s", count, limit)
@@ -103,8 +146,7 @@ def fit_messages(messages, *, max_tokens=None, tools=None, response_format=None)
     return result
 
 
-def build_context(messages, instruction, *, facts=None, summaries=None, evidence=None,
-                  max_tokens=None, memory=None):
+def build_context(messages, instruction, *, facts=None, summaries=None, max_tokens=None, memory=None):
     raw = [m for m in messages if isinstance(m, (HumanMessage, AIMessage))
            and "context_data" not in m.additional_kwargs and not getattr(m, "tool_calls", None)]
     current_index = next((i for i in range(len(raw) - 1, -1, -1)
@@ -116,16 +158,10 @@ def build_context(messages, instruction, *, facts=None, summaries=None, evidence
     history = []
     for message in raw[:current_index]:
         item = message.model_copy(deep=True)
+        # 供摘要更新后定位原文；此标记不再代表允许丢弃。
         item.additional_kwargs["context_role"] = "history"
-        if memory:
-            item.additional_kwargs["context_required"] = True
         history.append(item)
-    data = copy.deepcopy({"facts": facts or {}, "summaries": summaries or [], "evidence": evidence or {}})
-    if data["evidence"].get("sources"):
-        for source in data["evidence"]["sources"]:
-            source["excerpt"] = truncate_tokens(str(source.get("excerpt", "")),
-                                                get_settings().context_evidence_max_tokens)
-        data["evidence"]["sources"] = data["evidence"]["sources"][:4]
+    data = copy.deepcopy({"facts": facts or {}, "summaries": summaries or []})
     result = [SystemMessage(instruction), _data_message(data, memory), *history, current]
     # 持久化历史由异步模型入口整理；在那里计入实际工具定义并可补做摘要。
     return result if memory else fit_messages(result, max_tokens=max_tokens)
@@ -172,9 +208,8 @@ def assemble(messages, instruction: str, **facts):
     previous = context_data(messages)
     memory = next((m.additional_kwargs["memory_context"] for m in messages
                    if "memory_context" in m.additional_kwargs), None)
-    evidence = facts.pop("evidence", None) or previous.get("evidence", {})
     return build_context(
         messages, _SAFETY + "\n\n当前节点职责：" + instruction,
         facts={**previous.get("facts", {}), **facts},
-        summaries=previous.get("summaries", []), evidence=evidence, memory=memory,
+        summaries=previous.get("summaries", []), memory=memory,
     )

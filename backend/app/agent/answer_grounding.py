@@ -9,6 +9,7 @@ from decimal import Decimal
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from app.agent.context import ContextBudgetExceeded, fit_messages, grounding_message
 from app.agent.streaming import message_text
 
 logger = logging.getLogger(__name__)
@@ -109,17 +110,25 @@ async def ground_answer(question: str, evidence: dict, caller, config: dict, *, 
     if not sources:
         return GroundedAnswer("insufficient", "本次未找到能直接回答这个问题的资料，还需要补充对应依据后确认。")
     payload = {"question": question, "history": history or [], "retrieval_query": evidence.get("query"),
+               "warnings": evidence.get("warnings", []),
                "sources": [{key: source[key] for key in
                    ("document_id", "revision", "chunk_index", "title", "excerpt")} for source in sources]}
     messages = [
             SystemMessage(_INSTRUCTION + json.dumps(AnswerEvidence.model_json_schema(), ensure_ascii=False)),
-            HumanMessage(json.dumps(payload, ensure_ascii=False, separators=(",", ":"))),
+            grounding_message(payload),
     ]
+    canonical = {(s["document_id"], s["revision"], s["chunk_index"]): s for s in sources}
     try:
         for attempt in range(2):
+            # 修复提示也占预算；校验范围与这一次实际发送的片段、原文保持一致。
+            messages = fit_messages(messages, response_format={"type": "json_object"})
+            visible = next(m.additional_kwargs["grounding_data"] for m in messages
+                           if "grounding_data" in m.additional_kwargs)
+            visible_sources = [{**canonical[(s["document_id"], s["revision"], s["chunk_index"])], **s}
+                               for s in visible["sources"]]
             response = await caller.call(messages, config, node="answer_grounding", json_mode=True)
             try:
-                answer, used = _validate_response(response, sources, evidence.get("model_code"))
+                answer, used = _validate_response(response, visible_sources, evidence.get("model_code"))
                 break
             except (ValidationError, ValueError) as error:
                 reason = "invalid_output" if isinstance(error, ValidationError) else str(error)
@@ -129,12 +138,21 @@ async def ground_answer(question: str, evidence: dict, caller, config: dict, *, 
                 feedback = {"validation_error": reason,
                             "instruction": "上次输出未通过校验。请按schema重新生成完整JSON；只输出claims和missing。quote逐字摘录原文。text中的数字必须出现在对应quote里，型号除外；不要复述客户给的其他数值，可改用‘您描述的情况’。没有所问事实的直接依据就将该事项放进missing，不补猜，不添加无关的已知参数。最多4项，每项简短。"}
                 messages.append(HumanMessage(json.dumps(feedback, ensure_ascii=False)))
+        limited = bool({"context_sources_omitted", "context_excerpt_truncated"} & set(visible.get("warnings", [])))
+        if limited and not answer.claims:
+            raise ContextBudgetExceeded("trimmed evidence did not answer the question")
         text = "\n\n".join(claim.text for claim in answer.claims)
         if answer.missing:
             text += ("\n\n" if text else "") + "这次查到的资料里，尚未找到“" + "、".join(answer.missing) + "”的直接依据，这些内容需要补充对应资料后再确认。"
         if used:
             text += "\n参考资料：" + "、".join(dict.fromkeys(s["title"] for s in used.values()))
+        if limited and answer.missing:
+            text += "\n本次受上下文预算限制，只核对了部分资料；待核实事项可缩小范围后重试。"
         return GroundedAnswer(answer.status, text, list(used.values()), [c.model_dump() for c in answer.claims])
+    except ContextBudgetExceeded:
+        unavailable.reason = "context_budget"
+        unavailable.text = "本轮问题与资料暂时超出可用上下文预算，尚未完成所问信息的核对。请缩小问题范围后重试，或联系人工客服核实。"
+        return unavailable
     except Exception as exc:
         logger.warning("answer evidence verification unavailable error_type=%s", type(exc).__name__)
         unavailable.reason = "model_unavailable"

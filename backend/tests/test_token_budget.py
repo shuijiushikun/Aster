@@ -1,5 +1,7 @@
 """Token budgeting includes the whole prompt and protects required context."""
 
+import json
+
 import pytest
 import tiktoken
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -36,10 +38,12 @@ def test_token_truncation_preserves_unicode_and_does_not_mutate_evidence(monkeyp
         assert "\ufffd" not in shortened
         assert text_tokens(shortened) <= limit
     monkeypatch.setattr(get_settings(), "context_evidence_max_tokens", 20)
-    evidence = {"sources": [{"document_id": "KB-1", "excerpt": text}]}
-    result = context.build_context([HumanMessage("问题")], "规则", evidence=evidence)
-    assert text_tokens(context.context_data(result)["evidence"]["sources"][0]["excerpt"]) <= 20
-    assert evidence["sources"][0]["excerpt"] == text
+    evidence = {"ok": True, "data": {"sources": [{"document_id": "KB-1", "excerpt": text}]}}
+    reply = ToolMessage(json.dumps(evidence, ensure_ascii=False), name="search_knowledge", tool_call_id="read")
+    request = AIMessage("", tool_calls=[{"id": "read", "name": "search_knowledge", "args": {}}])
+    result = context.fit_messages([HumanMessage("问题"), request, reply])
+    assert text_tokens(json.loads(result[-1].content)["data"]["sources"][0]["excerpt"]) <= 20
+    assert json.loads(reply.content)["data"]["sources"][0]["excerpt"] == text
 
 
 def test_tools_and_tool_messages_count_but_usage_and_context_metadata_do_not():

@@ -17,28 +17,34 @@ from tests.seed_data import seed_exchange_samples
 
 def test_assembly_keeps_current_once_and_history_in_order_and_data_out_of_system():
     messages = [HumanMessage("旧问题"), AIMessage("旧回答"), HumanMessage("当前问题")]
-    result = context.assemble(messages, "节点职责", evidence={"sources": [{"excerpt": "检索正文片段"}]})
+    result = context.assemble(messages, "节点职责", ticket_description="客户补充的问题片段")
     assert [m.content for m in result if m.content in ("旧问题", "旧回答", "当前问题")] == [
         "旧问题", "旧回答", "当前问题"
     ]
     assert sum(m.content == "当前问题" for m in result) == 1
-    assert "检索正文片段" not in result[0].content
+    assert "客户补充的问题片段" not in result[0].content
     assert isinstance(result[0], SystemMessage)
     assert isinstance(result[-1], HumanMessage)
 
 
-def test_budget_drops_old_history_then_summary_then_evidence_and_preserves_core():
-    messages = [HumanMessage("旧" * 900), AIMessage("答" * 900), HumanMessage("保留当前问题")]
-    result = context.build_context(
-        messages, "安全规则", max_tokens=2180,
-        facts={"owner_customer_id": "CUST-1", "ticket": {"id": "TKT-1", "status": "PENDING_REVIEW"}},
-        summaries=[{"summary_text": "摘要" * 600}],
-        evidence={"sources": [{"document_id": "KB-1", "excerpt": "证据" * 600}]},
+@pytest.mark.parametrize("compact_catalog", [False, True])
+def test_budget_drops_related_summary_then_catalog_name_and_preserves_memory(compact_catalog):
+    raw = [HumanMessage("之前的问题"), AIMessage("之前的回答"), HumanMessage("保留当前问题")]
+    facts = {"owner_customer_id": "CUST-1", "ticket": {"id": "TKT-1", "status": "PENDING_REVIEW"},
+             "catalog_products": [{"model_code": "HP-01", "name": "商品名称 " * 100}]}
+    summaries = [{"conversation_id": "OTHER", "summary_text": "关联摘要" * 600},
+                 {"conversation_id": "CID", "summary_text": "当前摘要", "covered_message_id": 1}]
+    messages = context.build_context(raw, "安全规则", facts=facts, summaries=summaries,
+        memory={"customer_id": "CUST-1", "conversation_id": "CID", "current_message_id": 4})
+    core_facts = {**facts, "catalog_products": [{"model_code": "HP-01"}]} if compact_catalog else facts
+    expected = context.build_context(raw, "安全规则", facts=core_facts, summaries=summaries[1:])
+    settings = get_settings()
+    result = context.fit_messages(messages,
+        max_tokens=context.context_tokens(expected) + settings.max_output_tokens + settings.context_token_margin + 20,
     )
-    assert context.context_tokens(result) <= 900
-    text = "".join(str(m.content) for m in result)
-    assert "CUST-1" in text and "PENDING_REVIEW" in text and "保留当前问题" in text
-    assert "旧" * 10 not in text and "摘要" * 10 not in text and "KB-1" not in text
+    assert context.context_data(result) == {"facts": core_facts, "summaries": summaries[1:]}
+    assert [m.content for m in result[2:]] == [m.content for m in raw]
+    assert context.context_data(messages)["summaries"] == summaries
 
 
 def test_mandatory_overflow_fails_and_tool_pairs_stay_ordered():

@@ -76,7 +76,7 @@ async def _memory_rows(session, customer_id, cid, current_message_id=None):
 
 def _history_messages(rows):
     return [(HumanMessage if row.role == "user" else AIMessage)(row.content, id=f"db:{row.id}",
-             additional_kwargs={"context_role": "history", "context_required": True}) for row in reversed(rows)]
+             additional_kwargs={"context_role": "history"}) for row in reversed(rows)]
 
 
 async def load_context(customer_id: str, cid: str, *, current_message_id: int | None = None,
@@ -211,9 +211,9 @@ async def _summary_budget_available(memory, config):
 
 
 async def prepare_model_context(messages, config, caller, *, tools=None, response_format=None) -> list:
-    """先尝试常规裁剪；必需历史超限时，更新摘要后重新衔接，保留本轮工具循环。"""
-    def fit(value):
-        return fit_messages(value, tools=tools, response_format=response_format)
+    """辅助信息→连续历史摘要→检索尾部；每步都保留当前问题与工具配对。"""
+    def fit(value, *, trim_evidence=False):
+        return fit_messages(value, tools=tools, response_format=response_format, trim_evidence=trim_evidence)
 
     try:
         return fit(messages)
@@ -221,7 +221,8 @@ async def prepare_model_context(messages, config, caller, *, tools=None, respons
         memory = next((message.additional_kwargs["memory_context"] for message in messages
                        if "memory_context" in message.additional_kwargs), None)
         if not memory or caller is None:
-            raise
+            return fit(messages, trim_evidence=True)
+    refreshed = messages
     try:
         async with asyncio.timeout(get_settings().summary_timeout_s):
             refreshed = await _refresh_memory(messages, memory)
@@ -230,16 +231,21 @@ async def prepare_model_context(messages, config, caller, *, tools=None, respons
                     return fit(refreshed)
                 except ContextBudgetExceeded:
                     if not await _summary_budget_available(memory, config):
-                        raise
-                count = sum(bool(m.additional_kwargs.get("context_required")) for m in refreshed)
+                        break
+                count = sum(m.additional_kwargs.get("context_role") == "history"
+                            and isinstance(m, (HumanMessage, AIMessage)) and not getattr(m, "tool_calls", None)
+                            for m in refreshed)
                 keep = 2 if attempt == 0 and count > 2 else 0
                 if not await maybe_summarize(memory["customer_id"], memory["conversation_id"], caller, config,
                     before_message_id=memory["current_message_id"], force=True, keep_recent=keep):
                     break
                 refreshed = await _refresh_memory(refreshed, memory)
-            return fit(refreshed)
+            return fit(refreshed, trim_evidence=True)
     except TimeoutError as exc:
-        raise ContextBudgetExceeded("conversation summary preparation timed out") from exc
+        try:
+            return fit(refreshed, trim_evidence=True)
+        except ContextBudgetExceeded:
+            raise ContextBudgetExceeded("conversation summary preparation timed out") from exc
 
 
 async def maybe_summarize(customer_id: str, cid: str, caller, config, *, timeout_s=None,
