@@ -169,7 +169,7 @@ async def test_indexing_and_hybrid_retrieval_with_real_local_qdrant(engine, monk
         assert first["status"] == "indexed" and second["status"] == "unchanged"
         manifest = await read_manifest(client, settings)
         assert manifest["bm25_average_length"] > 0
-        config = (await client.get_collection("bm25")).config.params
+        config = (await client.get_collection(manifest["collection"])).config.params
         assert config.sparse_vectors[SPARSE_VECTOR].modifier == models.Modifier.IDF
         worker = retrieval.KnowledgeRetriever(make_store(), client, settings)
         result = await worker.retrieve("左右声道平衡", model_code="HP-01", category="digital",

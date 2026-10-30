@@ -1,4 +1,4 @@
-"""JSON front matter（YAML 的子集）+ Markdown；按小节切分，固定点 ID。"""
+"""JSON front matter + Markdown；按小节切分，同一索引代次内点 ID 固定。"""
 
 import hashlib
 import json
@@ -51,7 +51,7 @@ def load_corpus(directory: Path = KNOWLEDGE_DIR) -> tuple[list[KnowledgeMetadata
             metadata.update(owner=OWNER, record_type="chunk", index_generation=generation,
                             model_code=meta.model_code or GENERAL_MODEL, chunk_index=i)
             nodes.append(TextNode(
-                id_=str(uuid5(NAMESPACE_URL, f"{OWNER}/{meta.document_id}/{meta.revision}/{i}")),
+                id_=str(uuid5(NAMESPACE_URL, f"{OWNER}/{generation}/{meta.document_id}/{meta.revision}/{i}")),
                 text=f"{meta.title}\n{text}", metadata=metadata,
                 # Qdrant 适配器的 document_id 来自 SOURCE，普通 metadata 同名项会被覆盖。
                 relationships={NodeRelationship.SOURCE: RelatedNodeInfo(node_id=meta.document_id)},

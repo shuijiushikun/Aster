@@ -14,7 +14,7 @@ from app.rag.corpus import GENERAL_MODEL, OWNER
 from app.rag.embedding import make_embedding
 from app.rag.schemas import Evidence, RetrievalResult
 from app.rag.sparse import reciprocal_rank_fusion
-from app.rag.store import condition, read_manifest
+from app.rag.store import condition, read_manifest, vector_store
 
 logger = logging.getLogger(__name__)
 
@@ -63,16 +63,24 @@ class KnowledgeRetriever:
             raise ValueError("invalid rerank indices")
         return [(candidates[r["index"]], float(r["relevance_score"])) for r in rows]
 
-    async def recall(self, bundle, filters, mode):
+    def index_for_manifest(self, manifest):
+        if not manifest.get("collection"):
+            return self.index  # 兼容首次重建前的旧布局。
+        store = vector_store(self.settings, self.client, collection_name=manifest["collection"],
+                             bm25_average_length=manifest["bm25_average_length"])
+        return VectorStoreIndex.from_vector_store(store, embed_model=self.embedding)
+
+    async def recall(self, bundle, filters, mode, *, index=None):
         s = self.settings
-        return await self.index.as_retriever(
+        return await (index or self.index).as_retriever(
             similarity_top_k=s.rag_candidate_k, sparse_top_k=s.rag_candidate_k,
             vector_store_query_mode=mode, vector_store_kwargs={"qdrant_filters": filters},
         ).aretrieve(bundle)
 
     async def retrieve(self, query: str, *, model_code: str | None = None, category: str | None = None,
                        mode: str | None = None, rerank: bool | None = None,
-                       query_embedding: list[float] | None = None, overview: bool = False) -> RetrievalResult:
+                       query_embedding: list[float] | None = None, overview: bool = False,
+                       snapshot: dict | None = None) -> RetrievalResult:
         """无可信型号时只检索通用文档；未知或品类不符的型号直接要求核实。"""
         s = self.settings
         mode = mode or s.rag_search_mode
@@ -84,22 +92,23 @@ class KnowledgeRetriever:
             return RetrievalResult(**base, status="insufficient_evidence", reason="invalid_query")
         try:
             async with asyncio.timeout(s.rag_timeout_s):
-                manifest = await read_manifest(self.client, s)
+                manifest = snapshot if snapshot is not None else await read_manifest(self.client, s)
                 if manifest.get("state") != "ready":
                     return RetrievalResult(**base, status="unavailable", reason="index_not_ready")
                 if model_code and not any(d["model_code"] == model_code and d["category"] == category
                                           for d in manifest["documents"]):
                     return RetrievalResult(**base, status="insufficient_evidence", reason="unverified_model_scope")
                 filters = scope_filter(manifest, model_code, category)
+                index = self.index_for_manifest(manifest)
                 bundle = QueryBundle(query_str=query, embedding=query_embedding)
                 # 两路独立召回、独立校准；不能先按 dense 拒答，否则 BM25 无法补召回。
-                dense = await self.recall(bundle, filters, "default")
+                dense = await self.recall(bundle, filters, "default", index=index)
                 dense_ok = bool(dense) and (dense[0].score or 0) >= s.rag_min_dense_score
                 candidates = dense
                 accepted = dense_ok
                 score_kind, warnings = "cosine", ["knowledge_overview"] if overview else []
                 if mode == "hybrid":
-                    sparse = await self.recall(bundle, filters, "sparse")
+                    sparse = await self.recall(bundle, filters, "sparse", index=index)
                     threshold = s.rag_min_bm25_score
                     sparse_ok = bool(sparse) and threshold > 0 and (sparse[0].score or 0) >= threshold
                     accepted = dense_ok or sparse_ok

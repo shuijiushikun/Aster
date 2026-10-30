@@ -62,7 +62,9 @@ async def evaluate(*, calibrate=False, calibration_path: Path | None = None, con
     rows = []
     async with open_store(settings) as (store, client):
         retriever = KnowledgeRetriever(store, client, settings)
-        manifest = await read_manifest(client, settings) if calibrate else None
+        manifest = await read_manifest(client, settings)
+        if manifest.get("generation") != generation:
+            raise ValueError("published knowledge generation differs from the local evaluation corpus")
         # 各模式共享同一批真实查询向量；避免比较时重复计费。
         embeddings = await retriever.embedding.aget_text_embedding_batch([c["query"] for c in cases])
         semaphore = asyncio.Semaphore(concurrency)
@@ -76,7 +78,8 @@ async def evaluate(*, calibrate=False, calibration_path: Path | None = None, con
             for mode, rerank in modes:
                 start = time.perf_counter()
                 result = await retriever.retrieve(case["query"], model_code=case["model_code"],
-                    category=case["category"], mode=mode, rerank=rerank, query_embedding=vector)
+                    category=case["category"], mode=mode, rerank=rerank, query_embedding=vector,
+                    snapshot=manifest)
                 expected = case["expected_document_id"]
                 matches = [s.document_id == expected and case.get("expected_text", "") in s.excerpt
                            for s in result.sources]
@@ -95,7 +98,8 @@ async def evaluate(*, calibrate=False, calibration_path: Path | None = None, con
                     sources=[dict(document_id=s.document_id, chunk_index=s.chunk_index) for s in result.sources]))
                 if calibrate:
                     sparse = await retriever.recall(QueryBundle(query_str=case["query"], embedding=vector),
-                        scope_filter(manifest, case["model_code"], case["category"]), "sparse")
+                        scope_filter(manifest, case["model_code"], case["category"]), "sparse",
+                        index=retriever.index_for_manifest(manifest))
                     case_rows[-1]["bm25_score"] = float(sparse[0].score or 0) if sparse else 0.0
             return case_rows
 
@@ -103,7 +107,8 @@ async def evaluate(*, calibrate=False, calibration_path: Path | None = None, con
         rows = [row for batch in batches for row in batch]
     report = dict(embedding_model=settings.embed_model_name, dimension=settings.embed_dimension,
                   rerank_model=settings.rerank_model, generation=generation,
-                  collection=settings.qdrant_collection, sparse_version=SPARSE_VERSION,
+                  collection=settings.qdrant_collection,
+                  index_collection=manifest.get("collection", settings.qdrant_collection), sparse_version=SPARSE_VERSION,
                   bm25_k1=BM25_K1, bm25_b=BM25_B,
                   min_dense_score=settings.rag_min_dense_score, min_bm25_score=settings.rag_min_bm25_score,
                   split=split, dataset_cases=len(cases), dataset_sha256=fingerprint(RETRIEVAL_PATH), concurrency=concurrency)

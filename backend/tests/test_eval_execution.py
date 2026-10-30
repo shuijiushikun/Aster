@@ -73,6 +73,12 @@ async def test_parallel_evaluation_limits_requests_and_preserves_case_order(monk
     cases = [c for c in load_retrieval_cases() if c.split == "evaluation"]
     cases = [next(c for c in cases if c.expected_document_id), next(c for c in cases if not c.expected_document_id)]
     instances = []
+    published = {"generation": "test-generation", "collection": "pinned-snapshot"}
+    reads = []
+
+    async def manifest(*args):
+        reads.append(True)
+        return published
 
     class Retriever:
         def __init__(self, *args):
@@ -85,6 +91,7 @@ async def test_parallel_evaluation_limits_requests_and_preserves_case_order(monk
             return [[1.0] for _ in texts]
 
         async def retrieve(self, *args, **kwargs):
+            assert kwargs["snapshot"] is published
             self.active += 1
             self.peak = max(self.peak, self.active)
             await asyncio.sleep(0.001)
@@ -99,6 +106,7 @@ async def test_parallel_evaluation_limits_requests_and_preserves_case_order(monk
     monkeypatch.setattr(module, "load_retrieval_cases", lambda: cases)
     monkeypatch.setattr(module, "load_corpus", lambda: ([], [], "test-generation"))
     monkeypatch.setattr(module, "open_store", store)
+    monkeypatch.setattr(module, "read_manifest", manifest)
     monkeypatch.setattr(module, "KnowledgeRetriever", Retriever)
     parallel = await module.evaluate(concurrency=2)
     sequential = await module.evaluate(concurrency=1)
@@ -107,6 +115,7 @@ async def test_parallel_evaluation_limits_requests_and_preserves_case_order(monk
     assert [(r["id"], r["mode"]) for r in parallel["rows"]] == [
         (r["id"], r["mode"]) for r in sequential["rows"]]
     assert parallel["concurrency"] == 2
+    assert len(reads) == 2 and parallel["index_collection"] == "pinned-snapshot"
 
 
 @pytest.mark.parametrize("concurrency", [0, 9])
@@ -115,6 +124,24 @@ async def test_invalid_evaluation_concurrency_is_rejected(concurrency):
 
     with pytest.raises(ValueError, match="并发"):
         await evaluate(concurrency=concurrency)
+
+
+async def test_evaluation_rejects_a_different_published_generation(monkeypatch):
+    from app.rag import evaluate as module
+
+    @asynccontextmanager
+    async def store(settings):
+        yield None, None
+
+    async def manifest(*args):
+        return {"generation": "another-generation"}
+
+    monkeypatch.setattr(module, "get_settings", lambda: Settings(_env_file=None))
+    monkeypatch.setattr(module, "open_store", store)
+    monkeypatch.setattr(module, "KnowledgeRetriever", lambda *args: SimpleNamespace())
+    monkeypatch.setattr(module, "read_manifest", manifest)
+    with pytest.raises(ValueError, match="generation differs"):
+        await module.evaluate(concurrency=1)
 
 
 def test_answer_metrics_separate_missing_evidence_and_verification_outage():
