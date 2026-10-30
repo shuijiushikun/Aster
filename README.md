@@ -39,6 +39,13 @@ Aster 将订单查询、商品咨询、退款申请和换货办理放在同一�
 
 ## 架构
 
+下图展示会话入口、工具调用，以及知识问答、模拟退款和换货工单的主要流程。点击图片可查看原图。
+
+[![Aster 业务流程：会话管理、意图分类、Agent 与 MCP 工具调用、知识问答、退款确认、换货审批和分代知识索引](assets/diagrams/business-process.png)](assets/diagrams/business-process.png)
+
+<details>
+<summary>查看模块调用关系（Mermaid）</summary>
+
 ```mermaid
 flowchart TD
     UI[React 客户与管理工作台] <-->|HTTP / SSE| API[FastAPI · 身份与请求边界]
@@ -60,6 +67,8 @@ flowchart TD
     RAG --> Qdrant[(Qdrant)]
     API --> Redis[(Redis · 限流 / 锁 / 用量)]
 ```
+
+</details>
 
 聊天图负责多轮工具循环，换货图负责需要等待人工处理的长流程。申请提交后，业务服务保存工单，工作流根据工单状态暂停或继续。管理员审批写入数据库后，再由工作流执行模拟受理。
 
