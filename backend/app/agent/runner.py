@@ -549,7 +549,12 @@ async def _run_agent_turn(
         )
         if trace:
             yield await emit("trace", "opik", trace)
-        yield {"kind": "error", "message": _ERROR_MESSAGE}
+        from app.agent.context import ContextBudgetExceeded
+
+        message = ("这段会话内容较长，暂时未能在上下文预算内整理好历史。"
+                   "聊天记录已保留，请稍后重试，或在新会话中补充当前问题和订单号。"
+                   if isinstance(exc, ContextBudgetExceeded) else _ERROR_MESSAGE)
+        yield {"kind": "error", "message": message}
         return
     finally:
         TURNS_IN_FLIGHT.dec()

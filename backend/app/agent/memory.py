@@ -7,7 +7,14 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from sqlalchemy import func, select, update
 
 from app.after_sales.references import resolve_order_reference
-from app.agent.context import build_context, identifiers
+from app.agent.context import (
+    ContextBudgetExceeded,
+    _data_message,
+    build_context,
+    context_data,
+    fit_messages,
+    identifiers,
+)
 from app.agent.streaming import message_text
 from app.agent.tokens import context_tokens, input_token_limit, text_tokens
 from app.config import get_settings
@@ -47,27 +54,39 @@ async def _summary(session, customer_id, cid):
     )
 
 
+async def _memory_rows(session, customer_id, cid, current_message_id=None):
+    await _owned(session, customer_id, cid)
+    query = select(Message).where(Message.conversation_id == cid, Message.role == "user")
+    if current_message_id is not None:
+        query = query.where(Message.id == current_message_id)
+    current = await session.scalar(query.order_by(Message.id.desc()).limit(1))
+    if current is None:
+        raise ValueError("current user message not found")
+    summary = await _summary(session, customer_id, cid)
+    pointer = summary.covered_message_id if summary else 0
+    if pointer >= current.id:
+        raise StaleTurn()
+    history = list(await session.scalars(
+        select(Message).where(Message.conversation_id == cid, Message.id > pointer,
+                              Message.id < current.id, Message.role.in_(("user", "assistant")))
+        .order_by(Message.id.desc())
+    ))
+    return current, summary, history
+
+
+def _history_messages(rows):
+    return [(HumanMessage if row.role == "user" else AIMessage)(row.content, id=f"db:{row.id}",
+             additional_kwargs={"context_role": "history", "context_required": True}) for row in reversed(rows)]
+
+
 async def load_context(customer_id: str, cid: str, *, current_message_id: int | None = None,
                        system_prompt: str | None = None):
     from app.agent.prompts import get_system_prompt
 
     async with db.SessionLocal() as session:
-        await _owned(session, customer_id, cid)
-        current_query = select(Message).where(Message.conversation_id == cid, Message.role == "user")
-        if current_message_id is not None:
-            current_query = current_query.where(Message.id == current_message_id)
-        current = await session.scalar(current_query.order_by(Message.id.desc()).limit(1))
-        if current is None:
-            raise ValueError("current user message not found")
-        summary = await _summary(session, customer_id, cid)
+        current, summary, history = await _memory_rows(session, customer_id, cid, current_message_id)
         pointer = summary.covered_message_id if summary else 0
-        history = list(await session.scalars(
-            select(Message).where(Message.conversation_id == cid, Message.id > pointer,
-                                  Message.id < current.id, Message.role.in_(("user", "assistant")))
-            .order_by(Message.id.desc()).limit(7)
-        ))
-        raw = [HumanMessage(row.content, id=f"db:{row.id}") if row.role == "user"
-               else AIMessage(row.content, id=f"db:{row.id}") for row in reversed(history)]
+        raw = _history_messages(history)
         raw.append(HumanMessage(current.content, id=f"db:{current.id}"))
         ticket_ids, order_ids = identifiers(raw, "TKT"), identifiers(raw, "ORD")
         resolved_order_id = await resolve_order_reference(session, customer_id, current.content)
@@ -145,26 +164,100 @@ async def load_context(customer_id: str, cid: str, *, current_message_id: int | 
                                 "related_orders": related_orders, "resolved_order_id": resolved_order_id,
                                 "previous_order_id": previous_order_id,
                                 "catalog_products": catalog_products},
-                         summaries=summaries)
+                          summaries=summaries, memory={"customer_id": customer_id, "conversation_id": cid,
+                                                       "current_message_id": current.id})
 
 
-async def maybe_summarize(customer_id: str, cid: str, caller, config, *, timeout_s=None) -> bool:
+async def _refresh_memory(messages, memory):
+    cid, customer_id = memory["conversation_id"], memory["customer_id"]
+    async with db.SessionLocal() as session:
+        current, summary, history = await _memory_rows(session, customer_id, cid, memory["current_message_id"])
+    data = context_data(messages)
+    data["summaries"] = [item for item in data.get("summaries", []) if item.get("conversation_id") != cid]
+    if summary:
+        data["summaries"].append({"conversation_id": cid, "summary_text": summary.summary_text,
+                                  "covered_message_id": summary.covered_message_id})
+    result, found_current = [], False
+    for message in messages:
+        if "context_data" in message.additional_kwargs:
+            result.append(_data_message(data, memory))
+        elif (message.additional_kwargs.get("context_role") == "history"
+              and isinstance(message, (HumanMessage, AIMessage)) and not getattr(message, "tool_calls", None)):
+            continue
+        else:
+            if message.id == f"db:{current.id}":
+                result.extend(_history_messages(history))
+                found_current = True
+            result.append(message)
+    if not found_current:
+        raise ContextBudgetExceeded("current memory message missing")
+    return result
+
+
+async def _summary_budget_available(memory, config):
+    from app import redis as shared
+
+    settings = get_settings()
+    async with db.SessionLocal() as session:
+        await _owned(session, memory["customer_id"], memory["conversation_id"])
+        used = (await session.get(Conversation, memory["conversation_id"])).tokens_used or 0
+    runtime = config.get("configurable", {}).get("turn_runtime")
+    pending = sum((usage.get("input_tokens") or 0) + (usage.get("output_tokens") or 0)
+                  for usage in getattr(runtime, "usage", []))
+    global_cap = settings.demo_global_daily_token_budget if settings.is_demo else 0
+    return (used + pending < settings.max_conversation_tokens
+            and await shared.customer_tokens_today(memory["customer_id"]) + pending < settings.customer_daily_token_budget
+            and (not global_cap or await shared.global_tokens_today() + pending < global_cap))
+
+
+async def prepare_model_context(messages, config, caller, *, tools=None, response_format=None) -> list:
+    """先尝试常规裁剪；必需历史超限时，更新摘要后重新衔接，保留本轮工具循环。"""
+    def fit(value):
+        return fit_messages(value, tools=tools, response_format=response_format)
+
+    try:
+        return fit(messages)
+    except ContextBudgetExceeded:
+        memory = next((message.additional_kwargs["memory_context"] for message in messages
+                       if "memory_context" in message.additional_kwargs), None)
+        if not memory or caller is None:
+            raise
+    try:
+        async with asyncio.timeout(get_settings().summary_timeout_s):
+            refreshed = await _refresh_memory(messages, memory)
+            for attempt in range(2):
+                try:
+                    return fit(refreshed)
+                except ContextBudgetExceeded:
+                    if not await _summary_budget_available(memory, config):
+                        raise
+                count = sum(bool(m.additional_kwargs.get("context_required")) for m in refreshed)
+                keep = 2 if attempt == 0 and count > 2 else 0
+                if not await maybe_summarize(memory["customer_id"], memory["conversation_id"], caller, config,
+                    before_message_id=memory["current_message_id"], force=True, keep_recent=keep):
+                    break
+                refreshed = await _refresh_memory(refreshed, memory)
+            return fit(refreshed)
+    except TimeoutError as exc:
+        raise ContextBudgetExceeded("conversation summary preparation timed out") from exc
+
+
+async def maybe_summarize(customer_id: str, cid: str, caller, config, *, timeout_s=None,
+                          before_message_id: int | None = None, force: bool = False, keep_recent: int = 8) -> bool:
     """No network wait holds a transaction; compare-and-set prevents stale overwrite."""
     settings = get_settings()
     try:
         async with db.SessionLocal() as session:
             await _owned(session, customer_id, cid)
-            rows = list(await session.scalars(
-                select(Message).where(Message.conversation_id == cid,
-                                      Message.role.in_(("user", "assistant")))
-                .order_by(Message.id)
-            ))
-            if len(rows) < 12:
-                return False
             old = await _summary(session, customer_id, cid)
             pointer = old.covered_message_id if old else 0
-            prefix = [row for row in rows[:-8] if row.id > pointer]
-            if len(prefix) < 8:
+            query = select(Message).where(Message.conversation_id == cid, Message.id > pointer,
+                                           Message.role.in_(("user", "assistant")))
+            if before_message_id is not None:
+                query = query.where(Message.id < before_message_id)
+            rows = list(await session.scalars(query.order_by(Message.id)))
+            prefix = rows[:-keep_recent] if keep_recent else rows
+            if len(prefix) < (1 if force else 8):
                 return False
             old_text = old.summary_text if old else ""
         instruction = (

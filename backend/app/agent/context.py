@@ -33,10 +33,13 @@ def context_data(messages) -> dict:
     return {}
 
 
-def _data_message(data):
+def _data_message(data, memory=None):
+    metadata = {"context_data": data}
+    if memory:
+        metadata["memory_context"] = memory
     return HumanMessage(
         _DATA_PREFIX + json.dumps(data, ensure_ascii=False, default=str),
-        additional_kwargs={"context_data": data},
+        additional_kwargs=metadata,
     )
 
 
@@ -60,11 +63,12 @@ def fit_messages(messages, *, max_tokens=None, tools=None, response_format=None)
 
     original = size()
     for message in list(result):
-        if size() <= limit:
-            break
         if (message.additional_kwargs.get("context_role") == "history"
+                and not message.additional_kwargs.get("context_required")
                 and isinstance(message, (HumanMessage, AIMessage))
                 and not getattr(message, "tool_calls", None)):
+            if size() <= limit:
+                break
             result.remove(message)
     data_index = next((i for i, m in enumerate(result)
                        if "context_data" in m.additional_kwargs), None)
@@ -72,10 +76,15 @@ def fit_messages(messages, *, max_tokens=None, tools=None, response_format=None)
         data = context_data(result)
 
         def refresh():
-            result[data_index] = _data_message(data)
+            result[data_index] = _data_message(data, result[data_index].additional_kwargs.get("memory_context"))
 
-        while size() > limit and data.get("summaries"):
-            data["summaries"].pop(0)
+        while size() > limit:
+            # 当前会话摘要携带覆盖指针，删除它会留下历史缺口。
+            removable = next((i for i, summary in enumerate(data.get("summaries", []))
+                              if "covered_message_id" not in summary), None)
+            if removable is None:
+                break
+            data["summaries"].pop(removable)
             refresh()
         evidence = data.get("evidence") or {}
         while size() > limit and evidence.get("sources"):
@@ -95,7 +104,7 @@ def fit_messages(messages, *, max_tokens=None, tools=None, response_format=None)
 
 
 def build_context(messages, instruction, *, facts=None, summaries=None, evidence=None,
-                  max_tokens=None):
+                  max_tokens=None, memory=None):
     raw = [m for m in messages if isinstance(m, (HumanMessage, AIMessage))
            and "context_data" not in m.additional_kwargs and not getattr(m, "tool_calls", None)]
     current_index = next((i for i in range(len(raw) - 1, -1, -1)
@@ -105,9 +114,11 @@ def build_context(messages, instruction, *, facts=None, summaries=None, evidence
     current = raw[current_index].model_copy(deep=True)
     current.additional_kwargs["context_role"] = "current"
     history = []
-    for message in raw[:current_index][-7:]:
+    for message in raw[:current_index]:
         item = message.model_copy(deep=True)
         item.additional_kwargs["context_role"] = "history"
+        if memory:
+            item.additional_kwargs["context_required"] = True
         history.append(item)
     data = copy.deepcopy({"facts": facts or {}, "summaries": summaries or [], "evidence": evidence or {}})
     if data["evidence"].get("sources"):
@@ -115,8 +126,9 @@ def build_context(messages, instruction, *, facts=None, summaries=None, evidence
             source["excerpt"] = truncate_tokens(str(source.get("excerpt", "")),
                                                 get_settings().context_evidence_max_tokens)
         data["evidence"]["sources"] = data["evidence"]["sources"][:4]
-    return fit_messages([SystemMessage(instruction), _data_message(data), *history, current],
-                        max_tokens=max_tokens)
+    result = [SystemMessage(instruction), _data_message(data, memory), *history, current]
+    # 持久化历史由异步模型入口整理；在那里计入实际工具定义并可补做摘要。
+    return result if memory else fit_messages(result, max_tokens=max_tokens)
 
 
 def user_messages(messages):
@@ -158,9 +170,11 @@ def grounded_id(messages, candidate: str | None, prefix: str) -> str | None:
 
 def assemble(messages, instruction: str, **facts):
     previous = context_data(messages)
+    memory = next((m.additional_kwargs["memory_context"] for m in messages
+                   if "memory_context" in m.additional_kwargs), None)
     evidence = facts.pop("evidence", None) or previous.get("evidence", {})
     return build_context(
         messages, _SAFETY + "\n\n当前节点职责：" + instruction,
         facts={**previous.get("facts", {}), **facts},
-        summaries=previous.get("summaries", []), evidence=evidence,
+        summaries=previous.get("summaries", []), evidence=evidence, memory=memory,
     )
